@@ -1,0 +1,6 @@
+media
+exec
+*log*
+*cache*
+*.patch
+*.out
