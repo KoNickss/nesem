@@ -188,7 +188,10 @@ void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x
     cpu->SP--;
 
     cpu->SR.flags.Break = 0;
-    printStack(cpu);
+
+    #ifdef DEBUG
+        printStack(cpu);
+    #endif
 }
 
 
@@ -236,7 +239,10 @@ void PLA(CPU *cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->A = bus_read8(cpu->SP + STACK_RAM_OFFSET);
     cpu->SR.flags.Negative = cpu->A > 7;
     cpu->SR.flags.Zero = !cpu->A;
-    printStack(cpu);
+
+    #ifdef DEBUG
+        printStack(cpu);
+    #endif
 }
 
 void ROL(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -350,8 +356,9 @@ void CMP(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SR.flags.Carry = (cpu->A >= x.value);
     cpu->SR.flags.Zero = (cpu->A == x.value);
 
-    printf("\n\n-----\nA: %i\nM: %i\n-----\n", cpu->A, x.value);
-    
+    #ifdef DEBUG
+        printf("\n\n-----\nA: %i\nM: %i\n-----\n", cpu->A, x.value);
+    #endif    
 }
 
 void CPX(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -444,7 +451,7 @@ void LDA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     
     
 
-    #ifndef DISABLE_LDA_DEBUG
+    #ifdef DEBUG
         //0x00D01C location of error
         if(cpu->PC == 0x00D01C) {
             printf("LDA A = %X, VAL = %X, VALUE HIGH BYTE = %X\n", cpu->A, x.value, debug_read_do_not_use_pls(0x200));
@@ -487,7 +494,10 @@ void NOP(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 void PHA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     bus_write8(cpu->SP + STACK_RAM_OFFSET, cpu->A);
     cpu->SP--;
-    printStack(cpu);
+
+    #ifdef DEBUG
+        printStack(cpu);
+    #endif
 }
 
 void RTI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -506,12 +516,18 @@ void RTI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 void RTS(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SP++;
     word newPC = bus_read8(cpu->SP + STACK_RAM_OFFSET);
-    printf("\n%02X\n", newPC);
+
+    #ifdef DEBUG
+        printf("\n%02X\n", newPC);
+    #endif
+
     cpu->SP++;
     newPC |= bus_read8(cpu->SP + STACK_RAM_OFFSET) << 8;
-    printf("\n%04X\n", newPC);
 
-    printStack(cpu);
+    #ifdef DEBUG
+        printf("\n%04X\n", newPC);
+        printStack(cpu);
+    #endif
 
     cpu->PC = newPC;
 }
@@ -1818,7 +1834,11 @@ void init_cpu(CPU * __restrict__ cpu){
 }
 
 void cpu_clock(CPU * cpu){
-    handle_errors(cpu);
+
+    #ifdef DEBUG
+        handle_errors(cpu);
+    #endif
+
     cpu->pcNeedsInc = true;
     word args = 0;
     if(cpu->opcodes[bus_read8(cpu->PC)].bytes > 2){ //if args is 16bit shifts the first byte to the hi byte (they get reversed basically)
@@ -1826,7 +1846,9 @@ void cpu_clock(CPU * cpu){
     }
     args |= bus_read8(cpu->PC + 1); //add first arg byte
 
-    printf("\nBYTES: 0x%04X", args);
+    #ifdef DEBUG
+        printf("\nBYTES: 0x%04X", args);
+    #endif
 
     byte sizeOfInstruction = cpu->opcodes[bus_read8(cpu->PC)].bytes;
 
@@ -1834,5 +1856,13 @@ void cpu_clock(CPU * cpu){
 
     cpu->opcodes[bus_read8(cpu->PC)].microcode(cpu, args, cpu->opcodes[bus_read8(cpu->PC)].mode); //execute opcode function
 
-    if(cpu->pcNeedsInc) {cpu->PC += sizeOfInstruction; printf("\n%04X %04X\n", cpu->PC - sizeOfInstruction, cpu->PC);} //increase program counter
+    //EXECUTION DONE
+
+    if(cpu->pcNeedsInc){
+        cpu->PC += sizeOfInstruction;
+
+        #ifdef DEBUG
+            printf("\n%04X %04X\n", cpu->PC - sizeOfInstruction, cpu->PC);
+        #endif
+    } //increase program counter
 }

@@ -37,7 +37,11 @@ word mapper_resolve_write(word address, byte data){ //info about what regions ar
 void bus_write8(word address, word data){
     if(!mapper000_write(address, data, false)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
         address = mapper_resolve_write(address, data); //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
-        printf("\nwrite-ram 0x%04X at 0x%04X\n; old_val 0x%04X", data, address, bus_read8(address));
+        
+        #ifdef DEBUG
+            printf("\nwrite-ram 0x%04X at 0x%04X\n; old_val 0x%04X", data, address, bus_read8(address));
+        #endif
+
         bus[address] = (unsigned char)data;
     }
 }
@@ -106,6 +110,7 @@ int main(int argc, char * argv[]){
             exit(EXIT_FAILURE);
         }
     #endif
+
     init_cpu(cpu); //put new CPU in starting mode and dock it to the bus
     cpu->PC = PROG_START_ADDR;
 
@@ -116,28 +121,33 @@ int main(int argc, char * argv[]){
 
     //load the CHR and PRG banks from the .nes file (argv[1]), also loads the header for mapper construction
     init_banks(argv[1]);
-    debug = true;
 
     #ifdef DEBUG
         //Test to see if writing to the bus is working correctly
         bus_write8(0x0000, 0xFF);
-        printf("\nCACA CACA %02X %02X\n", bus_read8(0x0000), bus[0x0000]);
+        printf("\n---- ---- %02X %02X\n", bus_read8(0x0000), bus[0x0000]);
+
+
+        //open debug PC logfile
+        FILE * PClogFILE;
+        PClogFILE = fopen("PClogFILE", "w");
     #endif
 
     for(long iterations = 0; iterations != 3500; iterations++){
-        debug_print_instruction(cpu, bus_read8(cpu->PC));
-	    print_registers(cpu);
-        print_cpu(cpu);      
-	    dump_bus();
-        cpu_clock(cpu);
-        fprintf(stderr, "\n\n----\n%i\n-----", iterations);
-    }
 
-    debug = false;
+        #ifdef DEBUG
+            fprintf(PClogFILE, "%4X\n", cpu->PC);
+            debug_print_instruction(cpu, bus_read8(cpu->PC));
+            print_registers(cpu);
+            print_cpu(cpu);      
+            fprintf(stderr, "\n\n----\n%i\n-----", iterations);
+        #endif
+        
+        //RUN THE CPU CLOCK ONE TIME
+        cpu_clock(cpu);
+    }
     
-    printf("\n~~~~~~~~~~~~~~~~~~~~\n");
-    print_cpu(cpu);
-    printf("\nREGISTERS:\n\n");
-    print_registers(cpu);
-    dump_bus();
+    #ifdef DEBUG
+        dump_bus();
+    #endif
 }

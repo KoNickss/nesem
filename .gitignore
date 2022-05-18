@@ -4,3 +4,4 @@ exec
 *cache*
 *.patch
 *.out
+*dump*
