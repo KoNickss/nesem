@@ -17,7 +17,7 @@
 
 //REMOVE AFTER DEBUGGING DONE
 
-void printStack(CPU * cpu);
+void print_stack(CPU * cpu);
 
 
 busTransaction IMM(CPU * __restrict__ cpu, word bytes){
@@ -181,6 +181,7 @@ void BRK(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0
 }
 
 void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x08 PHP Push Status register to the stack
+    
     cpu->SR.flags.Break = 1;
     cpu->SR.flags.ignored = 1;
     
@@ -190,7 +191,7 @@ void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x
     cpu->SR.flags.Break = 0;
 
     #ifdef DEBUG
-        printStack(cpu);
+        print_stack(cpu);
     #endif
 }
 
@@ -224,14 +225,23 @@ void JSR(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //JS
 void BIT(CPU *cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     busTransaction x = addressing(cpu, bytes);
     cpu->SR.flags.Zero = !(cpu->A & x.value);
-    cpu->SR.flags.Negative = !!(x.value & 0b1000000); //the double !! is to make it a bool, otherwise some strange shit occurs, no idea why
-    cpu->SR.flags.Overflow = !!(x.value & 0b0100000);
+    cpu->SR.flags.Negative = (x.value >> 7) & 1;
+    cpu->SR.flags.Overflow = (x.value >> 6) & 1;
+
+    #ifdef DEBUG
+        printf("\nVALUE: 0x%2X || OVF: %i || \"!!(x.value & 0b01000000)\": %i\n", x.value, cpu->SR.flags.Overflow, (!!(x.value & 0b0100000)));
+    #endif
 }
 
 void PLP(CPU *cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SP++;
     cpu->SR.data = bus_read8(cpu->SP + STACK_RAM_OFFSET);
     cpu->SR.flags.Break = 0;
+    cpu->SR.flags.ignored = 1;
+
+    #ifdef DEBUG
+        print_stack(cpu);
+    #endif
 }
 
 void PLA(CPU *cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -241,7 +251,7 @@ void PLA(CPU *cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SR.flags.Zero = !cpu->A;
 
     #ifdef DEBUG
-        printStack(cpu);
+        print_stack(cpu);
     #endif
 }
 
@@ -268,12 +278,11 @@ void ADC(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word)){
     busTransaction x = addressing(cpu, bytes); //check line 85 for details
 
     word tmp = cpu->A + x.value + cpu->SR.flags.Carry;
-
-    cpu->SR.flags.Overflow = ~(cpu->A ^ x.value) & (cpu->A ^ tmp); //olc6502.cpp line 675
+    cpu->SR.flags.Overflow = tmp >= 128;
 
     cpu->SR.flags.Carry = tmp > 255;
     cpu->SR.flags.Zero = !((byte)tmp);
-    cpu->SR.flags.Negative = tmp & 0b1000000; //check for bit 8
+    cpu->SR.flags.Negative = tmp >> 7; //check for bit 8
 
     cpu->A = (byte)tmp;
 }
@@ -496,7 +505,7 @@ void PHA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SP--;
 
     #ifdef DEBUG
-        printStack(cpu);
+        print_stack(cpu);
     #endif
 }
 
@@ -505,12 +514,19 @@ void RTI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SP++;
     cpu->SR.data = bus_read8(cpu->SP + STACK_RAM_OFFSET);
 
+    cpu->SR.flags.ignored = 1;
+
     cpu->SP++;
     word newPC = bus_read8(cpu->SP + STACK_RAM_OFFSET); //read lsb
     cpu->SP++;
     newPC |= bus_read8(cpu->SP + STACK_RAM_OFFSET) << 8; //read msb
 
     cpu->PC = newPC;
+
+    #ifdef DEBUG
+        printf("\n%04X\n", newPC);
+        print_stack(cpu);
+    #endif
 }
 
 void RTS(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -526,7 +542,7 @@ void RTS(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 
     #ifdef DEBUG
         printf("\n%04X\n", newPC);
-        printStack(cpu);
+        print_stack(cpu);
     #endif
 
     cpu->PC = newPC;
@@ -1751,7 +1767,7 @@ void raise_error(unsigned int err, CPU * __restrict__ cpu){
     exit(err);
 }
 
-void printStack(CPU * __restrict__ cpu){
+void print_stack(CPU * __restrict__ cpu){
     char x[2] = {'.', '.'};
     printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     for(word i = STACK_RAM_OFFSET; i < STACK_RAM_OFFSET + 0xFF; i++){
