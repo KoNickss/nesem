@@ -277,12 +277,12 @@ void BMI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 void ADC(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word)){
     busTransaction x = addressing(cpu, bytes); //check line 85 for details
 
-    word tmp = cpu->A + x.value + cpu->SR.flags.Carry;
-    cpu->SR.flags.Overflow = tmp >= 128;
+    int tmp = cpu->A + x.value + cpu->SR.flags.Carry;
+    cpu->SR.flags.Overflow = ((cpu->A >> 7) != ((tmp >> 7) & 1)) && ((x.value >> 7) != ((tmp >> 7) & 1));
 
     cpu->SR.flags.Carry = tmp > 255;
     cpu->SR.flags.Zero = !((byte)tmp);
-    cpu->SR.flags.Negative = tmp >> 7; //check for bit 8
+    cpu->SR.flags.Negative = (tmp >> 7) & 1; //check for bit 7
 
     cpu->A = (byte)tmp;
 }
@@ -1735,6 +1735,7 @@ void print_cpu(CPU * __restrict__ cpu){
     printf("Y: %i\n", cpu->Y);
 
     printf("SR: "BYTE_TO_BINARY_PATTERN "\n", BYTE_TO_BINARY(cpu->SR.data));
+    printf("SR.data: 0x%02X\n", cpu->SR.data);
   #undef BYTE_TO_BINARY_PATTERN
   #undef BYTE_TO_BINARY
 }
