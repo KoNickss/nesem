@@ -30,7 +30,7 @@ typedef union{
 
 typedef struct{
     word address;
-    word value;
+    byte value;
 } busTransaction; //this is the type we use for our addressing types, they resolve to this type which contains a value and address
 
 
