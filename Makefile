@@ -1,8 +1,16 @@
-all:
-	cc bus.c cpu.c cartridge.c -o exec
+CC = clang
+CFLAGS = -g -DDEBUG -static
+RM = rm -rf
+OUTFILE = exec
+
+
+default: all
+
+all: $(OUTFILE)
+	$(CC) bus.c cpu.c cartridge.c -o $(OUTFILE)
 
 clean:
-	rm exec
+	$(RM) exec
 	
-debug:
-	cc -static -g -DDEBUG bus.c cpu.c cartridge.c -o exec
+debug $(OUTFILE):
+	$(CC) $(CFLAGS) bus.c cpu.c cartridge.c -o $(OUTFILE)
