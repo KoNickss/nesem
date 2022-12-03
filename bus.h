@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include "common.h"
 
 
@@ -13,5 +11,4 @@ word busRead16(word address);
 void busWrite16(word address, word data);
 
 void dumpBus();
-word mapperResolveRead(word address); //gets defined in the cartridge mapper circuit code bcuz it differs from cart to cart
-word mapperResolveWrite(word address, byte data);
+
