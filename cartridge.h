@@ -29,21 +29,21 @@ enum FLAG9_TV_MODE{
 typedef union {
     struct{
         struct {
-            byte mirroring_mode : 1;
+            byte mirroringMode : 1;
             byte battery : 1;
             byte trainer : 1;
-            byte disable_mirroring : 1;
+            byte disableMirroring : 1;
 
-            byte lower_mapper_number : 4;
+            byte lowerMapperNumber : 4;
         }flag6;
 
         struct {
             byte unisystem : 1;
-            byte play_choice_10 : 1;
+            byte playChoice10 : 1;
             byte INes_version : 2;
-            byte disable_mirroring : 1;
+            byte disableMirroring : 1;
 
-            byte upper_mapper_number : 4;
+            byte upperMapperNumber : 4;
         }flag7;
 
         struct {
@@ -51,7 +51,7 @@ typedef union {
         }flag8;
 
         struct {
-            byte tv_mode : 1;
+            byte tvMode : 1;
             byte padding : 7;
         }flag9;
     };
@@ -70,8 +70,8 @@ typedef struct{
 }HEADER;
 
 
-void init_banks(char * fn);
+void initBanks(char * fn);
 
-word mapper000_read(word address, bool ppu);
-bool mapper000_write(word address, byte data, bool ppu);
+word mapper000_Read(word address, bool ppu);
+bool mapper000_Write(word address, byte data, bool ppu);
 

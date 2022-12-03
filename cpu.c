@@ -43,7 +43,7 @@ busTransaction ACC(CPU * __restrict__ cpu, word bytes){
 busTransaction ZPG(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     x.address = bytes;
-    x.value = bus_read8(bytes);
+    x.value = busRead8(bytes);
     return x;
 }
 
@@ -51,7 +51,7 @@ busTransaction ZPGX(CPU * __restrict__ cpu, word bytes){ //not code related, but
     busTransaction x;
     bytes += cpu->X;
     x.address = bytes;
-    x.value = bus_read8(bytes);
+    x.value = busRead8(bytes);
     return x;
 }
 
@@ -59,21 +59,21 @@ busTransaction ZPGY(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     bytes += cpu->Y;
     x.address = bytes;
-    x.value = bus_read8(bytes);
+    x.value = busRead8(bytes);
     return x;
 }
 
 busTransaction REL(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     x.address = cpu->PC + (byte)bytes;
-    x.value = bus_read8(x.address);
+    x.value = busRead8(x.address);
     return x;
 }
 
 busTransaction ABS(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     x.address = bytes;
-    x.value = bus_read8(bytes);
+    x.value = busRead8(bytes);
     return x;
 }
 
@@ -81,7 +81,7 @@ busTransaction ABSX(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     bytes += cpu->X;
     x.address = bytes;
-    x.value = bus_read8(bytes);
+    x.value = busRead8(bytes);
     return x;
 }
 
@@ -89,13 +89,13 @@ busTransaction ABSY(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     bytes += cpu->Y;
     x.address = bytes;
-    x.value = bus_read8(bytes);
+    x.value = busRead8(bytes);
     return x;
 }
 
 busTransaction IND(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
-    x.address = bus_read16(bytes);
+    x.address = busRead16(bytes);
 
     //BAD CODE INCOMING:
     //ok so there is an exception JMP(6C) makes that, from the way I
@@ -113,13 +113,13 @@ busTransaction IND(CPU * __restrict__ cpu, word bytes){
     //Signed, Joaquin
 
     if((bytes & 0x00FF) == 0xFF){
-        x.address = bus_read8(bytes) | (bus_read8(bytes - 0xFF) << 8);
+        x.address = busRead8(bytes) | (busRead8(bytes - 0xFF) << 8);
     }
 
-    x.value = bus_read8(x.address);
+    x.value = busRead8(x.address);
 
     #ifdef DEBUG
-        printf("\nIND: X>ADDRESS %04X | X>VALUE %04X | BYTES %04X | BUS_READ8(BYTES) %04X | BUS_READ16{BYTES} %04X | BUS_READ8(BYTES+1) %04X | BUS_READ8(BYTES-1) %04X | BUS_READ8(BYTES - 0xFF) %04X\n", x.address, x.value, bytes, bus_read8(bytes), bus_read16(bytes), bus_read8(bytes + 1), bus_read8(bytes - 1), bus_read8(bytes - 0xFF));
+        printf("\nIND: X>ADDRESS %04X | X>VALUE %04X | BYTES %04X | busRead8(BYTES) %04X | busRead16{BYTES} %04X | busRead8(BYTES+1) %04X | busRead8(BYTES-1) %04X | busRead8(BYTES - 0xFF) %04X\n", x.address, x.value, bytes, busRead8(bytes), busRead16(bytes), busRead8(bytes + 1), busRead8(bytes - 1), busRead8(bytes - 0xFF));
     #endif
 
     return x;
@@ -128,8 +128,8 @@ busTransaction IND(CPU * __restrict__ cpu, word bytes){
 busTransaction INDX(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     
-    x.address = bus_read8((bytes + cpu->X) % 256) + bus_read8((bytes + cpu->X + 1) % 256) * 256;
-    x.value = bus_read8(x.address);
+    x.address = busRead8((bytes + cpu->X) % 256) + busRead8((bytes + cpu->X + 1) % 256) * 256;
+    x.value = busRead8(x.address);
 
     return x;
 }
@@ -137,8 +137,8 @@ busTransaction INDX(CPU * __restrict__ cpu, word bytes){
 busTransaction INDY(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     
-    x.address = bus_read8(bytes) + bus_read8((bytes + 1) % 256) * 256 + cpu->Y;
-    x.value = bus_read8(x.address);
+    x.address = busRead8(bytes) + busRead8((bytes + 1) % 256) * 256 + cpu->Y;
+    x.value = busRead8(x.address);
 
     return x;
 }
@@ -170,7 +170,7 @@ void ASL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     if(addressing == &ACC)
         cpu->A = x.value;
     else
-        bus_write8(x.address, x.value);
+        busWrite8(x.address, x.value);
 
     cpu->SR.flags.Zero = !x.value;
     cpu->SR.flags.Negative = x.value >> 7;
@@ -193,18 +193,18 @@ void BRK(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0
     pcMsb = cpu->PC >> 8;
     pcLsb = cpu->PC & 0x00FF;
 
-    bus_write8(cpu->SP + STACK_RAM_OFFSET, pcMsb);
+    busWrite8(cpu->SP + STACK_RAM_OFFSET, pcMsb);
     cpu->SP--;
-    bus_write8(cpu->SP + STACK_RAM_OFFSET, pcLsb);
+    busWrite8(cpu->SP + STACK_RAM_OFFSET, pcLsb);
     cpu->SP--;
 
     cpu->SR.flags.Break = 1;
-    bus_write8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data);
+    busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data);
     cpu->SP--;
     cpu->SR.flags.Break = 0;
 
-    word newPC = (bus_read8(0xFFFF) << 8); //read MSB
-    newPC |= bus_read8(0xFFFE); //read LSB
+    word newPC = (busRead8(0xFFFF) << 8); //read MSB
+    newPC |= busRead8(0xFFFE); //read LSB
     cpu->PC = newPC;
 }
 
@@ -213,7 +213,7 @@ void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x
     cpu->SR.flags.Break = 1;
     cpu->SR.flags.ignored = 1;
     
-    bus_write8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data);
+    busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data);
     cpu->SP--;
 
     cpu->SR.flags.Break = 0;
@@ -242,9 +242,9 @@ void JSR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //J
     pcMsb = cpu->PC >> 8;
     pcLsb = cpu->PC & 0x00FF;
 
-    bus_write8(cpu->SP + STACK_RAM_OFFSET, pcMsb);
+    busWrite8(cpu->SP + STACK_RAM_OFFSET, pcMsb);
     cpu->SP--;
-    bus_write8(cpu->SP + STACK_RAM_OFFSET, pcLsb);
+    busWrite8(cpu->SP + STACK_RAM_OFFSET, pcLsb);
     cpu->SP--;
 
     cpu->PC = x.address;
@@ -263,7 +263,7 @@ void BIT(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 
 void PLP(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SP++;
-    cpu->SR.data = bus_read8(cpu->SP + STACK_RAM_OFFSET);
+    cpu->SR.data = busRead8(cpu->SP + STACK_RAM_OFFSET);
     cpu->SR.flags.Break = 0;
     cpu->SR.flags.ignored = 1;
 
@@ -274,7 +274,7 @@ void PLP(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 
 void PLA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SP++;
-    cpu->A = bus_read8(cpu->SP + STACK_RAM_OFFSET);
+    cpu->A = busRead8(cpu->SP + STACK_RAM_OFFSET);
     cpu->SR.flags.Negative = cpu->A > 7;
     cpu->SR.flags.Zero = !cpu->A;
 
@@ -294,7 +294,7 @@ void ROL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     if(addressing == &ACC)
         cpu->A = x.value;
 
-    else bus_write8(x.address, x.value);
+    else busWrite8(x.address, x.value);
 
     cpu->SR.flags.Carry = new_carry;
 }
@@ -352,7 +352,7 @@ void ROR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     if(addressing == &ACC)
         cpu->A = x.value;
 
-    else bus_write8(x.address, x.value);
+    else busWrite8(x.address, x.value);
 }
 
 void CLD(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -454,7 +454,7 @@ void DEC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     busTransaction x = addressing(cpu, bytes); //check line 85 for details
     x.value--;
     //TODO: Does this need an ACC option?
-    bus_write8(x.address, x.value);
+    busWrite8(x.address, x.value);
     cpu->SR.flags.Negative = (x.value >> 7);
     cpu->SR.flags.Zero = (x.value == 0);
 }
@@ -473,7 +473,7 @@ void DEY(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 
 void INC(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     busTransaction x = addressing(cpu, bytes); //check line 85 for details
-    bus_write8(x.address, x.value + 1);
+    busWrite8(x.address, x.value + 1);
     cpu->SR.flags.Zero = !x.value;
     cpu->SR.flags.Negative = x.value >> 7;
 }
@@ -540,7 +540,7 @@ void LSR(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     if(addressing == &ACC){
         cpu->A = new_val;
     } else {
-        bus_write8(x.address, new_val);
+        busWrite8(x.address, new_val);
     }
 
     cpu->SR.flags.Carry = (x.value & 0b00000001);
@@ -553,7 +553,7 @@ void NOP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 }
 
 void PHA(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    bus_write8(cpu->SP + STACK_RAM_OFFSET, cpu->A);
+    busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->A);
     cpu->SP--;
 
     #ifdef DEBUG
@@ -564,14 +564,14 @@ void PHA(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 void RTI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->pcNeedsInc = false;
     cpu->SP++;
-    cpu->SR.data = bus_read8(cpu->SP + STACK_RAM_OFFSET);
+    cpu->SR.data = busRead8(cpu->SP + STACK_RAM_OFFSET);
 
     cpu->SR.flags.ignored = 1;
 
     cpu->SP++;
-    word newPC = bus_read8(cpu->SP + STACK_RAM_OFFSET); //read lsb
+    word newPC = busRead8(cpu->SP + STACK_RAM_OFFSET); //read lsb
     cpu->SP++;
-    newPC |= bus_read8(cpu->SP + STACK_RAM_OFFSET) << 8; //read msb
+    newPC |= busRead8(cpu->SP + STACK_RAM_OFFSET) << 8; //read msb
 
     cpu->PC = newPC;
 
@@ -583,14 +583,14 @@ void RTI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 
 void RTS(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SP++;
-    word newPC = bus_read8(cpu->SP + STACK_RAM_OFFSET);
+    word newPC = busRead8(cpu->SP + STACK_RAM_OFFSET);
 
     #ifdef DEBUG
         printf("\n%02X\n", newPC);
     #endif
 
     cpu->SP++;
-    newPC |= bus_read8(cpu->SP + STACK_RAM_OFFSET) << 8;
+    newPC |= busRead8(cpu->SP + STACK_RAM_OFFSET) << 8;
 
     #ifdef DEBUG
         printf("\n%04X\n", newPC);
@@ -632,17 +632,17 @@ void SED(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 
 void STA(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     busTransaction x = addressing(cpu, bytes); //check line 85 for details
-    bus_write8(x.address, cpu->A);
+    busWrite8(x.address, cpu->A);
 }
 
 void STX(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     busTransaction x = addressing(cpu, bytes); //check line 85 for details
-    bus_write8(x.address, cpu->X);
+    busWrite8(x.address, cpu->X);
 }
 
 void STY(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     busTransaction x = addressing(cpu, bytes); //check line 85 for details
-    bus_write8(x.address, cpu->Y);
+    busWrite8(x.address, cpu->Y);
 }
 
 void TAX(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -1764,7 +1764,7 @@ void init_opcodereg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x60].bytes = 1;
 }
 
-void print_registers(CPU * __restrict__ cpu){
+void printRegisters(CPU * __restrict__ cpu){
   printf("N: %i\n", cpu->SR.flags.Negative);
   printf("V: %i\n", cpu->SR.flags.Overflow);
   printf("B: %i\n", cpu->SR.flags.Break);
@@ -1775,7 +1775,7 @@ void print_registers(CPU * __restrict__ cpu){
  
 }
 
-void print_cpu(CPU * __restrict__ cpu){
+void printCpu(CPU * __restrict__ cpu){
     #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
     #define BYTE_TO_BINARY(byte_)  \
   (byte_ & 0x80 ? '1' : '0'), \
@@ -1801,7 +1801,7 @@ void print_cpu(CPU * __restrict__ cpu){
 }
 
 
-void raise_error(unsigned int err, CPU * __restrict__ cpu){
+void raiseError(unsigned int err, CPU * __restrict__ cpu){
     const char * ERROR_STR[13]= {
         "Unknown Error",
         "Tried to access a opcode that doesn't exist",
@@ -1821,10 +1821,10 @@ void raise_error(unsigned int err, CPU * __restrict__ cpu){
     fprintf(stderr, "%s", ERROR_STR[err]);
         fprintf(stderr, "CRASH!!!!\n\n");
         fprintf(stderr, "\tLOCATION: %#06x\n", cpu->PC);
-        fprintf(stderr, "\tOPCODE: %#06x\n", bus_read8(cpu->PC));
-        fprintf(stderr, "\tNAME: \"%s\"\n", cpu->opcodes[bus_read8(cpu->PC)].name);
-        fprintf(stderr, "\tMICRO: %p\n", cpu->opcodes[bus_read8(cpu->PC)].microcode);
-        fprintf(stderr, "\tMODE: %p\n", cpu->opcodes[bus_read8(cpu->PC)].mode);
+        fprintf(stderr, "\tOPCODE: %#06x\n", busRead8(cpu->PC));
+        fprintf(stderr, "\tNAME: \"%s\"\n", cpu->opcodes[busRead8(cpu->PC)].name);
+        fprintf(stderr, "\tMICRO: %p\n", cpu->opcodes[busRead8(cpu->PC)].microcode);
+        fprintf(stderr, "\tMODE: %p\n", cpu->opcodes[busRead8(cpu->PC)].mode);
     exit(err);
 }
 
@@ -1836,14 +1836,14 @@ void print_stack(CPU * __restrict__ cpu){
             x[0] = '[';
             x[1] = ']';
         }
-        printf(" %c%02X%c ", x[0], bus_read8(i), x[1]);
+        printf(" %c%02X%c ", x[0], busRead8(i), x[1]);
         x[0] = '.';
         x[1] = '.';
     }
     printf("\n");
 }
 
-void handle_errors(CPU * __restrict__ cpu){
+void handleErrors(CPU * __restrict__ cpu){
     enum ERRORS{
         NORMAL,
         OPCODES_OB,
@@ -1862,44 +1862,44 @@ void handle_errors(CPU * __restrict__ cpu){
 
 
     if(cpu == NULL){
-       raise_error(UNALLOC_CPU, cpu);
+       raiseError(UNALLOC_CPU, cpu);
     }
     if(cpu->PC > BUS_SIZE){
-        raise_error(BUS_OB, cpu);
+        raiseError(BUS_OB, cpu);
     }
     if(cpu->opcodes == NULL){
-        raise_error(UNALLOC_OP, cpu);
+        raiseError(UNALLOC_OP, cpu);
     }
 
-    struct instruction cur_inst = cpu->opcodes[bus_read8(cpu->PC)];
+    struct instruction cur_inst = cpu->opcodes[busRead8(cpu->PC)];
 
     if(cur_inst.microcode == NULL){
-        raise_error(UNALLOC_MICRO, cpu);
+        raiseError(UNALLOC_MICRO, cpu);
     }
     if(cur_inst.mode == NULL){
-        raise_error(UNALLOC_MODE, cpu);
+        raiseError(UNALLOC_MODE, cpu);
     }
     if(cur_inst.name == NULL){
-        raise_error(UNALLOC_NAME, cpu);
+        raiseError(UNALLOC_NAME, cpu);
     }
     if(cur_inst.cycles == 0){
-        raise_error(UNKNOWN_CYCLES, cpu);
+        raiseError(UNKNOWN_CYCLES, cpu);
     }
     if(cur_inst.bytes == 0){
-        raise_error(UNKNOWN_BYTES, cpu);
+        raiseError(UNKNOWN_BYTES, cpu);
     }
     if(cur_inst.microcode < ORA || cur_inst.microcode > TYA){
-        raise_error(UNKNOWN_MICRO, cpu);
+        raiseError(UNKNOWN_MICRO, cpu);
     }
 
-    printf("OP: %x\n", bus_read8(cpu->PC));
+    printf("OP: %x\n", busRead8(cpu->PC));
 }
 
 /*void printErrorCodes(CPU * cpu){
     printf("0x02 = %02X, 0x03 = %03X\n", )
 }*/
 
-void init_cpu(CPU * __restrict__ cpu){
+void initCpu(CPU * __restrict__ cpu){
     cpu->PC = 0;
     cpu->A = 0;
     cpu->X = 0;
@@ -1910,28 +1910,28 @@ void init_cpu(CPU * __restrict__ cpu){
     init_opcodereg(cpu);//import the stuff about each microcode, stuff like bytes per instruction, cycles, adressing mode, and operation in the array, where the value in the array is the byte that triggers that action for the CPU
 }
 
-void cpu_clock(CPU * cpu){
+void cpuClock(CPU * cpu){
 
     #ifdef DEBUG
-        handle_errors(cpu);
+        handleErrors(cpu);
     #endif
 
     cpu->pcNeedsInc = true;
     word args = 0;
-    if(cpu->opcodes[bus_read8(cpu->PC)].bytes > 2){ //if args is 16bit shifts the first byte to the hi byte (they get reversed basically)
-        args = bus_read8(cpu->PC + 2) << 8;
+    if(cpu->opcodes[busRead8(cpu->PC)].bytes > 2){ //if args is 16bit shifts the first byte to the hi byte (they get reversed basically)
+        args = busRead8(cpu->PC + 2) << 8;
     }
-    args |= bus_read8(cpu->PC + 1); //add first arg byte
+    args |= busRead8(cpu->PC + 1); //add first arg byte
 
     #ifdef DEBUG
         printf("\nBYTES: 0x%04X", args);
     #endif
 
-    byte sizeOfInstruction = cpu->opcodes[bus_read8(cpu->PC)].bytes;
+    byte sizeOfInstruction = cpu->opcodes[busRead8(cpu->PC)].bytes;
 
     //EXECUTION HERE
 
-    cpu->opcodes[bus_read8(cpu->PC)].microcode(cpu, args, cpu->opcodes[bus_read8(cpu->PC)].mode); //execute opcode function
+    cpu->opcodes[busRead8(cpu->PC)].microcode(cpu, args, cpu->opcodes[busRead8(cpu->PC)].mode); //execute opcode function
 
     //EXECUTION DONE
 

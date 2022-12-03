@@ -58,10 +58,10 @@ struct instruction{
     char cycles;
 };
 
-void print_cpu(CPU * cpu); //debug functions
-void raise_error(unsigned int err, CPU * cpu);
-void handle_errors(CPU * cpu);
-void print_registers(CPU * cpu);
+void printCpu(CPU * cpu); //debug functions
+void raiseError(unsigned int err, CPU * cpu);
+void handleErrors(CPU * cpu);
+void printRegisters(CPU * cpu);
 
-void cpu_clock(CPU * cpu); //tick function
-void init_cpu(CPU * cpu); //init cpu, allocate memory for opcode register and set flags to initial state
+void cpuClock(CPU * cpu); //tick function
+void initCpu(CPU * cpu); //init cpu, allocate memory for opcode register and set flags to initial state
