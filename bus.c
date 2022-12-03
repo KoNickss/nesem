@@ -12,32 +12,18 @@ unsigned char bus[BUS_SIZE]; //this is the bus array
 #include "cartridge.h"
 
 
-word mapperResolveRead(word address){ //info about what regions are mirrored can be found on the nes dev wiki
-
-    if(address <= 0x1FFF && address >= 0x0800)
-        address %= 0x0800;
-
-    if(address <= 0x3FFF && address >= 0x2008)
-        address = ((address - 0x2000) % 0x8) + 0x2000;
-            
-    return address;
-}
-
-word mapperResolveWrite(word address, byte data){ //info about what regions are mirrored can be found on the nes dev wiki
-
-    if(address <= 0x1FFF && address >= 0x0800)
-        address %= 0x0800;
-
-    if(address <= 0x3FFF && address >= 0x2008)
-        address = ((address - 0x2000) % 0x8) + 0x2000;
-            
-    return address;
-}
-
 void busWrite8(word address, word data){
     if(!mapper000_Write(address, data, false)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
-        address = mapperResolveWrite(address, data); //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
         
+        if(0x0000 <= address && address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+            address %= 0x07FF;
+
+
+        if(0x2000 <= address && address <= 0x3FFF){
+            //ppu stuff in the future
+            address = (address - 0x2000) % 8 + 0x2000;
+        }
+
         #ifdef DEBUG
             printf("\nwrite-ram at 0x%04X val = 0x%04X\n; old_val 0x%04X", address, data, busRead8(address));
         #endif
@@ -49,7 +35,18 @@ void busWrite8(word address, word data){
 word busRead8(word address){
     word data;
     if((data = mapper000_Read(address, false)) >= 0x100){ //we first ask the mapper to read the data from the address for us in case its on the cartridge, if it returns 0x100 (0xFF + 1 aka impossible to get from reading a byte) that means the data stored at that address is not on the cartridge, but rather on the nes memory, thus we hand the job over to the bus
-        address = mapperResolveRead(address); //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+        
+        
+        if(0x0000 <= address && address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+            address %= 0x07FF;
+
+
+        if(0x2000 <= address && address <= 0x3FFF){
+            //ppu stuff in the future
+            address = (address - 0x2000) % 8 + 0x2000;
+        }
+
+
         return bus[address];
     }else{
         return data;
