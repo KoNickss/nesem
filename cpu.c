@@ -97,6 +97,11 @@ busTransaction IND(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     x.address = bus_read16(bytes);
     x.value = bus_read8(x.address);
+
+    #ifdef DEBUG
+        printf("\nIND: X>ADDRESS %04X | X>VALUE %04X | BYTES %04X | BUS_READ8(BYTES) %04X | BUS_READ16{BYTES} %04X | BUS_READ8(BYTES+1) %04X | BUS_READ8(BYTES-1) %04X | DEBUGREAD_BYTES+1 %04X\n", x.address, x.value, bytes, bus_read8(bytes), bus_read16(bytes), bus_read8(bytes + 1), bus_read8(bytes - 1), debug_read_do_not_use_pls(bytes+1));
+    #endif
+
     return x;
 }
 
