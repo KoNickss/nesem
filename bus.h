@@ -7,11 +7,11 @@
 
 byte debug_read_do_not_use_pls(word address);
 
-void bus_write8(word address, word data);
-word bus_read8(word adress);
-word bus_read16(word address);
-void bus_write16(word address, word data);
+void busWrite8(word address, word data);
+word busRead8(word adress);
+word busRead16(word address);
+void busWrite16(word address, word data);
 
-void dump_bus();
-word mapper_resolve(word address); //gets defined in the cartridge mapper circuit code bcuz it differs from cart to cart
-
+void dumpBus();
+word mapperResolveRead(word address); //gets defined in the cartridge mapper circuit code bcuz it differs from cart to cart
+word mapperResolveWrite(word address, byte data);
