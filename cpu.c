@@ -96,10 +96,30 @@ busTransaction ABSY(CPU * __restrict__ cpu, word bytes){
 busTransaction IND(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     x.address = bus_read16(bytes);
+
+    //BAD CODE INCOMING:
+    //ok so there is an exception JMP(6C) makes that, from the way I
+    //wrote this code architecturally, I can't solve in an organic way
+    //other than making an exception right here, in the IND addresing mode
+    //that is used exclusively by JMP(6C) and nothing else, this sucks I know
+    //I'll try to find a smoother fix in the near future.
+
+    //The exception being that, when reading the value stored in bytes, it doesn't
+    //use carry, so for example for 0x02FF it doesnt read the 16 bit value in (0x02FF and 0x300),
+    //but rather (0x02FF and 0x0200), on the same page, since it cant carry over to the next page
+    //do not ask how long it took to find info about this, I feel this shouldn't really be
+    //brushed over so carelessly
+
+    //Signed, Joaquin
+
+    if((bytes & 0x00FF) == 0xFF){
+        x.address = bus_read8(bytes) | (bus_read8(bytes - 0xFF) << 8);
+    }
+
     x.value = bus_read8(x.address);
 
     #ifdef DEBUG
-        printf("\nIND: X>ADDRESS %04X | X>VALUE %04X | BYTES %04X | BUS_READ8(BYTES) %04X | BUS_READ16{BYTES} %04X | BUS_READ8(BYTES+1) %04X | BUS_READ8(BYTES-1) %04X | DEBUGREAD_BYTES+1 %04X\n", x.address, x.value, bytes, bus_read8(bytes), bus_read16(bytes), bus_read8(bytes + 1), bus_read8(bytes - 1), debug_read_do_not_use_pls(bytes+1));
+        printf("\nIND: X>ADDRESS %04X | X>VALUE %04X | BYTES %04X | BUS_READ8(BYTES) %04X | BUS_READ16{BYTES} %04X | BUS_READ8(BYTES+1) %04X | BUS_READ8(BYTES-1) %04X | BUS_READ8(BYTES - 0xFF) %04X\n", x.address, x.value, bytes, bus_read8(bytes), bus_read16(bytes), bus_read8(bytes + 1), bus_read8(bytes - 1), bus_read8(bytes - 0xFF));
     #endif
 
     return x;
@@ -474,6 +494,12 @@ void JMP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     busTransaction x = addressing(cpu, bytes); //check line 85 for details
     cpu->PC = x.address;
     cpu->pcNeedsInc = false;
+
+    //Part of the code for this opcode that manages the scenario in which we read from 0xXXFF
+    //(scenario in which we read the msb from 0xXX00, not 0xXY00, as would be logical, because
+    //JMP doesnt use carry and as such can't read from the next page) is regrettably written directly
+    //in the IND function that is only used by JMP(6C) because including it here would've overly complicated
+    //for no reason, look at the IND function for further detailing
 }
 
 void LDA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){

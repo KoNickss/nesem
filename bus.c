@@ -39,7 +39,7 @@ void bus_write8(word address, word data){
         address = mapper_resolve_write(address, data); //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
         
         #ifdef DEBUG
-            printf("\nwrite-ram 0x%04X at 0x%04X\n; old_val 0x%04X", data, address, bus_read8(address));
+            printf("\nwrite-ram at 0x%04X val = 0x%04X\n; old_val 0x%04X", address, data, bus_read8(address));
         #endif
 
         bus[address] = (unsigned char)data;
@@ -133,7 +133,7 @@ int main(int argc, char * argv[]){
         PClogFILE = fopen("PClogFILE", "w");
     #endif
 
-    for(long iterations = 0; iterations != 3500; iterations++){
+    for(long iterations = 0; iterations != 9000; iterations++){
 
         #ifdef DEBUG
             fprintf(PClogFILE, "%4X\n", cpu->PC);
