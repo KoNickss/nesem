@@ -57,9 +57,9 @@ word bus_read8(word address){
 }
 
 word bus_read16(word address){
-    word d = bus_read8(address); //read msb
+    word d = bus_read8(address+1); //read msb
     d <<= 8; //put msb in the msb section
-    d |= bus_read8(address+1); //read lsb
+    d |= bus_read8(address); //read lsb
     return d; //return whole word
 }
 
