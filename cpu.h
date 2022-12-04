@@ -63,5 +63,8 @@ void raiseError(unsigned int err, CPU * cpu);
 void handleErrors(CPU * cpu);
 void printRegisters(CPU * cpu);
 
-void cpuClock(CPU * cpu); //tick function
+
 void initCpu(CPU * cpu); //init cpu, allocate memory for opcode register and set flags to initial state
+void cpuNmi(CPU * cpu); //process non-maskable interrupt, do not use this to trigger nmi, run the activateCpuNmi function in the bus instead
+
+void cpuClock(CPU * cpu); //tick function

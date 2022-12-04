@@ -1,26 +1,65 @@
 #include "ppu.h"
 
+#include "cartridge.h" //needs acces to the cartridge to load CHR maps, since r/w functions are in-house instead of bus-wide like it is for busRead/Write it needs to be imported here too, quite like there are physical wires connecting the cartridge CHR bank pins to the PPU
+
+byte ppuBus[0x3FFF];
+
+PPU ppu;
 
 
+byte ppuRead(word address){
 
-void ppuWrite(PPU * Ppu, word address, byte data){
+    word cartResponse;
+
+    if((cartResponse = mapper000_Read(address, true)) == 0x0100){
+
+        if(address >= 0x3000 && 0x3EFF <= address) //mirrored region
+            address -= 0x1000;
+
+        if(address >= 0x3F20 && 0x3FFF <= address) //mirrored region
+            address = (address - 0x3F00) % 0x20 + 0x3F00;
+
+        return ppuBus[address];
+    }
+
+    else return cartResponse;
+
+}
+
+void ppuWrite(word address, byte data){
+
+    if(!mapper000_Write(address, data, true)){
+
+        if(address >= 0x3000 && 0x3EFF <= address) //mirrored region
+            address -= 0x1000;
+
+        if(address >= 0x3F20 && 0x3FFF <= address) //mirrored region
+            address = (address - 0x3F00) % 0x20 + 0x3F00;
+
+        ppuBus[address] = data;
+    }
+
+}
+
+
+void ppuRegWrite(word address, byte data){
     address -= 0x2000;
     switch(address){
         case 0: //ppuctrl
 
-            Ppu->control.full = data;
+            ppu.control.full = data;
 
         break;
 
         case 1: //ppumask
 
-            Ppu->mask.full = data;
+            ppu.mask.full = data;
 
         break;
 
         case 2: //ppustatus
 
-            Ppu->status.full = data;
+            ppu.status.full = data;
 
         break;
 
@@ -34,59 +73,63 @@ void ppuWrite(PPU * Ppu, word address, byte data){
 
         case 5: //ppuScroll
 
-            if(Ppu->scroll.expectingY){
-                Ppu->scroll.y = data;
+            if(ppu.scroll.expectingY){
+                ppu.scroll.y = data;
             }else{
-                Ppu->scroll.x = data;
+                ppu.scroll.x = data;
             }
 
-            Ppu->scroll.expectingY = !Ppu->scroll.expectingY;
+            ppu.scroll.expectingY = !ppu.scroll.expectingY;
 
         break;
 
         case 6: //ppuAddr
 
-            if(Ppu->address.expectLsb){
-                Ppu->address.lsb = data;
+            if(ppu.address.expectLsb){
+                ppu.address.lsb = data;
             }else{
-                Ppu->address.msb = data;
+                ppu.address.msb = data;
             }
 
-            Ppu->address.expectLsb = !Ppu->address.expectLsb;
+            ppu.address.expectLsb = !ppu.address.expectLsb;
 
         break;
 
         case 7: //ppuData
 
-            Ppu->bus[Ppu->address.complete] = data;
+            ppuWrite(ppu.address.complete, data);
 
-            if(Ppu->control.vramIncrement) Ppu->address.complete += 32;
-            else Ppu->address.complete++;
+            if(ppu.control.vramIncrement) ppu.address.complete += 32;
+            else ppu.address.complete++;
 
         break;
     }
 }
 
-byte ppuRead(PPU * Ppu, word address){ //send the registers to the bus so the components can read them
+byte ppuRegRead(word address){ //send the registers to the bus so the components can read them
     
     address -= 0x2000;
+
+    byte returnData;
+
     switch(address){
         case 0: //ppuctrl
 
-            return Ppu->control.full;
+            return ppu.control.full;
 
         break;
 
         case 1: //ppumask
 
-            return Ppu->mask.full;
+            return ppu.mask.full;
             
         break;
 
         case 2: //ppustatus
 
-            return Ppu->status.full;
-            Ppu->status.vblank = 0;
+            return ppu.status.full;
+            ppu.status.vblank = 0;
+            ppu.address.expectLsb = false;
 
         break;
 
@@ -113,18 +156,42 @@ byte ppuRead(PPU * Ppu, word address){ //send the registers to the bus so the co
 
         case 7: //ppuData
 
-            //delayed by one cycle
+            returnData = ppu.dataByteBuffer; //reads are lagged back by one cycle, the data you read is the data of the last query
+
+            ppu.dataByteBuffer = ppuRead(ppu.address.complete);
+
+            if(ppu.address.complete >= 0x3F00 && 0x3FFF <= ppu.address.complete) //except when reading palette info
+                returnData = ppuRead(ppu.address.complete); //then the query is immediate
+
+
+            return returnData;
 
         break;
     }
 
 }
 
-void initPpu(PPU * Ppu){
-    Ppu->address.expectLsb = 0;
-    Ppu->scroll.expectingY = 0;
-    Ppu->control.full = 0;
-    Ppu->dataByteBuffer = 0;
-    Ppu->mask.full = 0;
-    Ppu->status.full = 0;
+void dumpPpuBus(){
+    
+    for(int i = 0; i < 0x3FFF; i++){
+        printf("%02X ", ppuRead(i));
+    }
+
+}
+
+void initPpu(){
+    ppu.dataByteBuffer = 0;
+    ppu.address.expectLsb = 0;
+    ppu.scroll.expectingY = 0;
+    ppu.control.full = 0;
+    ppu.dataByteBuffer = 0;
+    ppu.mask.full = 0;
+    ppu.status.full = 0;
+}
+
+void ppuClock(){
+    //one tick of the PPU clock
+
+    
+
 }

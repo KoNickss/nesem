@@ -97,12 +97,11 @@ typedef struct{
         byte expectLsb : 1;
     }address;
 
-    byte bus[0x3FFF];
-
     byte dataByteBuffer;
 }PPU;
 
 void initPpu();
+void dumpPpuBus();
 
-void ppuWrite(word address, byte data);
-byte ppuRead(word address);
+void ppuRegWrite(word address, byte data);
+byte ppuRegRead(word address);

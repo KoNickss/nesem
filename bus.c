@@ -9,7 +9,11 @@ unsigned char bus[BUS_SIZE]; //this is the bus array
 
 #include "cpu.h"
 
+#include "ppu.h"
+
 #include "cartridge.h"
+
+bool activateCpuNmiBool = false;
 
 
 void busWrite8(word address, word data){
@@ -97,10 +101,21 @@ static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
 }
 
 
+void activateCpuNmi(){
+    activateCpuNmiBool = true;
+}
+
+
+
 #define PROG_START_ADDR 0xC000
 
 int main(int argc, char * argv[]){
+
+    activateCpuNmiBool = false;
+
     CPU * cpu = (CPU*)malloc(sizeof(CPU)); //create new CPU
+
+
     #ifdef DEBUG
         if(cpu == NULL){
             fprintf(stderr, "ERR: Out of RAM!\n");
@@ -130,6 +145,24 @@ int main(int argc, char * argv[]){
         PClogFILE = fopen("PClogFILE", "w");
     #endif
 
+    #ifdef DEBUG
+        //ppu tests
+        printf("\nCACA\n");
+        printf("\nt\n");
+        initPpu();
+        printf("\nk\n");
+        ppuRegWrite(0x2006, 0x00);
+        printf("\nok\n");
+        ppuRegWrite(0x2006, 0x10);
+        printf("\nok1\n");
+        ppuRegWrite(0x2007, 0x22);
+        printf("\nok2\n");
+        ppuRegWrite(0x2007, 0x33);
+        printf("\nok3\n");
+        dumpPpuBus();
+    #endif
+
+
     for(long iterations = 0; iterations != 9000; iterations++){
 
         #ifdef DEBUG
@@ -140,6 +173,10 @@ int main(int argc, char * argv[]){
             fprintf(stderr, "\n\n----\n%i\n-----", iterations);
         #endif
         
+        if(activateCpuNmiBool){
+            cpuNmi(cpu);
+            activateCpuNmiBool = false;
+        }
         //RUN THE CPU CLOCK ONE TIME
         cpuClock(cpu);
     }
