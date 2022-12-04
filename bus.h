@@ -1,7 +1,8 @@
 #include "common.h"
 
-
 #define BUS_SIZE 0xFFFF
+
+void activateCpuNmi();
 
 byte debug_read_do_not_use_pls(word address);
 

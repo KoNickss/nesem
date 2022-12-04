@@ -1910,6 +1910,25 @@ void initCpu(CPU * __restrict__ cpu){
     init_opcodereg(cpu);//import the stuff about each microcode, stuff like bytes per instruction, cycles, adressing mode, and operation in the array, where the value in the array is the byte that triggers that action for the CPU
 }
 
+void cpuNmi(CPU * cpu){
+
+    //push PC to stack
+    busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->PC >> 8);
+    cpu->SP--;
+
+    busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->PC & 0x00FF);
+    cpu->SP--;
+
+    cpu->SR.flags.Break = 0;
+    cpu->SR.flags.Interrupt = 1; //set flags
+    cpu->SR.flags.ignored = 1;
+
+    busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data); //push status register to stack
+    cpu->SP--;
+
+    cpu->PC = busRead8(0xFFFE) | (busRead8(0xFFFF) << 8); //read new PC from address
+}
+
 void cpuClock(CPU * cpu){
 
     #ifdef DEBUG

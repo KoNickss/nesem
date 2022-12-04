@@ -6,11 +6,11 @@ OUTFILE = exec
 
 default: all
 
-all: $(OUTFILE)
+all:
 	$(CC) bus.c cpu.c cartridge.c -o $(OUTFILE)
 
 clean:
-	$(RM) exec
+	$(RM) $(OUTFILE)
 	
-debug $(OUTFILE):
-	$(CC) $(CFLAGS) bus.c cpu.c cartridge.c -o $(OUTFILE)
+debug:
+	$(CC) $(CFLAGS) bus.c cpu.c ppu.c cartridge.c -o $(OUTFILE)
