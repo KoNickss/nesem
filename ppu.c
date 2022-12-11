@@ -48,6 +48,7 @@ void ppuRegWrite(word address, byte data){
         case 0: //ppuctrl
 
             ppu.control.full = data;
+            ppu.tReg.bits.nameTableID = ppu.control.nameTableID;
 
         break;
 
@@ -73,35 +74,55 @@ void ppuRegWrite(word address, byte data){
 
         case 5: //ppuScroll
 
-            if(ppu.scroll.expectingY){
-                ppu.scroll.y = data;
+            if(ppu.expectingLsb){
+                //second write
+                ppu.tReg.bits.fineY = data & 0b00000111; //set fineY
+                ppu.tReg.bits.coarseY = data >> 3; //set coarse Y
             }else{
-                ppu.scroll.x = data;
+                //first write
+                ppu.xReg = data & 0b00000111; //set fineX
+                ppu.tReg.bits.coarseX = data >> 3; //set coarse X
             }
 
-            ppu.scroll.expectingY = !ppu.scroll.expectingY;
+            ppu.expectingLsb = !ppu.expectingLsb;
 
         break;
 
         case 6: //ppuAddr
 
-            if(ppu.address.expectLsb){
-                ppu.address.lsb = data;
+            if(ppu.expectingLsb){
+                //second write
+                ppu.tReg.data = (ppu.tReg.data & 0xFF00) | (data & 0x00FF);
+
+                ppu.vReg.data = ppu.tReg.data; //IMPORTANT V SYNC
+
             }else{
-                ppu.address.msb = data;
+                //first write
+                word buf;
+                buf = data & 0b00111111; //eliminate highest 2 bits
+                buf = buf << 8;
+                buf = buf | (ppu.tReg.data & 0xFF);
+                ppu.tReg.data = buf;
+
+                ppu.tReg.bits.fineY = ppu.tReg.bits.fineY & 0b011; //clear highest bit of fine Y
             }
 
-            ppu.address.expectLsb = !ppu.address.expectLsb;
+            ppu.expectingLsb = !ppu.expectingLsb;
 
         break;
 
         case 7: //ppuData
 
-            ppuWrite(ppu.address.complete, data);
+            ppuWrite(ppu.vReg.data, data);
 
-            if(ppu.control.vramIncrement) ppu.address.complete += 32;
-            else ppu.address.complete++;
+            if(ppu.control.vramIncrement) ppu.vReg.data += 32;
+            else ppu.vReg.data++;
 
+        break;
+
+        default:
+            fprintf(stderr, "ERR: Invalid write to PPU register of address %llX\n!", address + 0x2000);
+            abort();
         break;
     }
 }
@@ -129,7 +150,7 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
 
             return ppu.status.full;
             ppu.status.vblank = 0;
-            ppu.address.expectLsb = false;
+            ppu.expectingLsb = false;
 
         break;
 
@@ -158,14 +179,19 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
 
             returnData = ppu.dataByteBuffer; //reads are lagged back by one cycle, the data you read is the data of the last query
 
-            ppu.dataByteBuffer = ppuRead(ppu.address.complete);
+            ppu.dataByteBuffer = ppuRead(ppu.vReg.data);
 
-            if(ppu.address.complete >= 0x3F00 && 0x3FFF <= ppu.address.complete) //except when reading palette info
-                returnData = ppuRead(ppu.address.complete); //then the query is immediate
+            if(ppu.vReg.data >= 0x3F00 && 0x3FFF <= ppu.vReg.data) //except when reading palette info
+                returnData = ppuRead(ppu.vReg.data); //then the query is immediate
 
 
             return returnData;
 
+        break;
+
+        default:
+            fprintf(stderr, "ERR: Invalid read to PPU register of address %llX\n!", address + 0x2000);
+            abort();
         break;
     }
 
@@ -181,12 +207,14 @@ void dumpPpuBus(){
 
 void initPpu(){
     ppu.dataByteBuffer = 0;
-    ppu.address.expectLsb = 0;
-    ppu.scroll.expectingY = 0;
+    ppu.expectingLsb = 0;
     ppu.control.full = 0;
     ppu.dataByteBuffer = 0;
     ppu.mask.full = 0;
     ppu.status.full = 0;
+
+    ppu.vReg.bits.fixedOne = 1;
+    ppu.tReg.bits.fixedOne = 1;
 }
 
 void ppuClock(){
