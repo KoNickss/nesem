@@ -26,7 +26,7 @@ typedef struct{
     */
     union {
         struct {
-            byte nametable : 2;
+            byte nameTableID : 2;
             byte vramIncrement : 1;
             byte spritePatternTable : 1;
             byte backgroundPatternTable : 1;
@@ -39,7 +39,6 @@ typedef struct{
     struct {
         byte x;
         byte y;
-        byte expectingY : 1;
     }scroll;
 
 
@@ -94,10 +93,43 @@ typedef struct{
 
             word complete;
         };
-        byte expectLsb : 1;
     }address;
 
     byte dataByteBuffer;
+
+    struct{
+        union{
+            struct{
+                byte fixedOne : 1;
+                byte fineY : 3;
+                byte nameTableID : 2;
+                byte coarseY : 5;
+                byte coarseX : 5;
+
+            }bits;
+
+            word data;
+        };
+    }vReg; //Search for: "IMPORTANT V SYNC" in ppu.c to see moments where the 2 sync
+
+    struct{
+        union{
+            struct{
+                byte fixedOne : 1;
+                byte fineY : 3;
+                byte nameTableID : 2;
+                byte coarseY : 5;
+                byte coarseX : 5;
+
+            }bits;
+
+            word data;
+        };
+    }tReg; //Search for: "IMPORTANT V SYNC" in ppu.c to see moments where the 2 sync
+
+    byte xReg;
+
+    bool expectingLsb;
 }PPU;
 
 void initPpu();
