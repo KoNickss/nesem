@@ -3,6 +3,22 @@
 //Credits to wiki.nesdev.com for these register graphs
 //https://wiki.nesdev.com/w/index.php?title=PPU_registers
 
+typedef struct{
+    union{
+        struct{
+            byte unused : 1;
+            byte fineY : 3;
+            byte nameTableID : 2;
+            byte coarseY : 5;
+            byte coarseX : 5;
+
+        }bits;
+
+        word data;
+    };
+}locationRegister;
+
+
 
 //Start of PPU struct
 typedef struct{
@@ -81,35 +97,9 @@ typedef struct{
 
     byte dataByteBuffer;
 
-    struct{
-        union{
-            struct{
-                byte fixedOne : 1;
-                byte fineY : 3;
-                byte nameTableID : 2;
-                byte coarseY : 5;
-                byte coarseX : 5;
+    locationRegister vReg; //Search for: "IMPORTANT V SYNC" in ppu.c to see moments where the 2 sync
 
-            }bits;
-
-            word data;
-        };
-    }vReg; //Search for: "IMPORTANT V SYNC" in ppu.c to see moments where the 2 sync
-
-    struct{
-        union{
-            struct{
-                byte fixedOne : 1;
-                byte fineY : 3;
-                byte nameTableID : 2;
-                byte coarseY : 5;
-                byte coarseX : 5;
-
-            }bits;
-
-            word data;
-        };
-    }tReg; //Search for: "IMPORTANT V SYNC" in ppu.c to see moments where the 2 sync
+    locationRegister tReg; //Search for: "IMPORTANT V SYNC" in ppu.c to see moments where the 2 sync
 
     byte xReg;
 
