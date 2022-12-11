@@ -1,11 +1,69 @@
 #include "ppu.h"
+#include "common.h"
 
 #include "cartridge.h" //needs acces to the cartridge to load CHR maps, since r/w functions are in-house instead of bus-wide like it is for busRead/Write it needs to be imported here too, quite like there are physical wires connecting the cartridge CHR bank pins to the PPU
 
-byte ppuBus[0x3FFF];
+#define PPU_BUS_SIZE (0x3FFF)
+byte ppuBus[PPU_BUS_SIZE];
 
 PPU ppu;
 
+inline word resolveNameTableAddress(word regData){
+    return (regData & 0b0000111111111111) | (1 << (14 - 1));
+}
+
+/*
+10NNYYYYYXXXXX
+10100010100011  ==> $28A3
+--~~-----~~~~~
+^ ^ ^    ^
+| | |    |
+| | y=5  x=3
+| |
+| 3rd name table
+|
+fixed
+*/
+
+word resolveAttributeTableAddress(word regData){
+    locationRegister n;
+    n.data = regData;
+    byte trimmedCoarseX = n.bits.coarseX >> 2; //trim the lowest 2 bits of coarse X
+    byte trimmedCoarseY = n.bits.coarseY >> 2; //trim the lowest 2 bits of coarse Y
+
+    word ret = trimmedCoarseX | (trimmedCoarseY << 3); //YYYXXX
+    ret = 0b1111 >> 6 | ret; //1111YYYXXX
+    ret = n.bits.nameTableID << 10 | ret; //NN1111YYYXXX
+    ret = 0b10 << 12 | ret; //10NN1111YYYXXX
+
+    return ret;
+}
+
+/*
+10NN1111YYYXXX
+10101111001000
+--~~----~~~---
+^ ^ ^   ^  ^
+| | |   |  |
+| | |   |  x=3>>2
+| | |   |
+| | |   y=5>>2
+| | |
+| | offset of the attribute table from a name table
+| | each name table has 960 bytes, i.e. $3C0 == 1111000000
+| | that's why the address has 1111 in the middle
+| |
+| 3rd name table
+|
+fixed
+*/
+
+
+// ----
+//
+//BUS ENGINE FUNCTIONS
+//
+// ----
 
 byte ppuRead(word address){
 
@@ -212,9 +270,6 @@ void initPpu(){
     ppu.dataByteBuffer = 0;
     ppu.mask.full = 0;
     ppu.status.full = 0;
-
-    ppu.vReg.bits.fixedOne = 1;
-    ppu.tReg.bits.fixedOne = 1;
 }
 
 void ppuClock(){
