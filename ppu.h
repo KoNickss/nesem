@@ -36,12 +36,6 @@ typedef struct{
         byte full;
     }control;
 
-    struct {
-        byte x;
-        byte y;
-    }scroll;
-
-
     /*
     7  bit  0
     ---- ----
@@ -84,16 +78,6 @@ typedef struct{
         byte full;
     }mask;
 
-    struct{
-        union{
-            struct{
-                byte lsb;
-                byte msb;
-            };
-
-            word complete;
-        };
-    }address;
 
     byte dataByteBuffer;
 
