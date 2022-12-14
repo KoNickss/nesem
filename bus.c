@@ -171,7 +171,7 @@ int main(int argc, char * argv[]){
             debug_print_instruction(cpu, busRead8(cpu->PC));
             printRegisters(cpu);
             printCpu(cpu);      
-            fprintf(stderr, "\n\n----\n%i\n-----", iterations);
+            printf("\n\n----\n%i\n-----", iterations);
         #endif
         
         if(activateCpuNmiBool){

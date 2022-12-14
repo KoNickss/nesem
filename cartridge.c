@@ -10,11 +10,15 @@ word not_handling_this = 0x100; //0xFF + 1
 void loadRomfileHeader(FILE * romfile){
     byte verificationToken[3] = "NES";
     for(byte i = 0; i < 3; i++)
-        if(verificationToken[i] != getc(romfile)) return;
+        if(verificationToken[i] != getc(romfile)){
+            fprintf(stderr, "ERR: This is not a NES Rom!!!\n");
+            exit(EXIT_FAILURE);
+            return;
+        }
     getc(romfile); //get over the DOS EOF byte
     Header.PRG_BANKS = getc(romfile);
     Header.CHR_BANKS = getc(romfile);
-    
+
     for(byte i = 0; i < 5; i++){
         Header.flags.array[i] = getc(romfile);
     }
@@ -22,7 +26,7 @@ void loadRomfileHeader(FILE * romfile){
 
 void initBanks(char name[]){
     FILE * romfile;
-    romfile = fopen(name, "r");
+    romfile = fopen(name, "rb");
 
     #ifdef DEBUG
         if(romfile == NULL){
