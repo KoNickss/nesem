@@ -1800,6 +1800,21 @@ void printCpu(CPU * __restrict__ cpu){
   #undef BYTE_TO_BINARY
 }
 
+enum ERRORS{
+    NORMAL,
+    OPCODES_OB,
+    BUS_OB,
+    UNALLOC_MICRO,
+    UNALLOC_MODE,
+    UNALLOC_NAME,
+    UNALLOC_OP,
+    UNALLOC_INST,
+    UNALLOC_CPU,
+    UNKNOWN_MICRO,
+    UNKNOWN_MODE,
+    UNKNOWN_BYTES,
+    UNKNOWN_CYCLES
+};
 
 void raiseError(unsigned int err, CPU * __restrict__ cpu){
     const char * ERROR_STR[13]= {
@@ -1822,7 +1837,10 @@ void raiseError(unsigned int err, CPU * __restrict__ cpu){
         fprintf(stderr, "CRASH!!!!\n\n");
         fprintf(stderr, "\tLOCATION: %#06x\n", cpu->PC);
         fprintf(stderr, "\tOPCODE: %#06x\n", busRead8(cpu->PC));
-        fprintf(stderr, "\tNAME: \"%s\"\n", cpu->opcodes[busRead8(cpu->PC)].name);
+        if(err != UNALLOC_NAME && err != UNALLOC_MICRO)
+            fprintf(stderr, "\tNAME: \"%s\"\n", cpu->opcodes[busRead8(cpu->PC)].name);
+        else
+            fprintf(stderr, "\tNAME: \"%s\"\n", NULL);
         fprintf(stderr, "\tMICRO: %p\n", cpu->opcodes[busRead8(cpu->PC)].microcode);
         fprintf(stderr, "\tMODE: %p\n", cpu->opcodes[busRead8(cpu->PC)].mode);
     exit(err);
@@ -1844,23 +1862,6 @@ void print_stack(CPU * __restrict__ cpu){
 }
 
 void handleErrors(CPU * __restrict__ cpu){
-    enum ERRORS{
-        NORMAL,
-        OPCODES_OB,
-        BUS_OB,
-        UNALLOC_MICRO,
-        UNALLOC_MODE,
-        UNALLOC_NAME,
-        UNALLOC_OP,
-        UNALLOC_INST,
-        UNALLOC_CPU,
-        UNKNOWN_MICRO,
-        UNKNOWN_MODE,
-        UNKNOWN_BYTES,
-        UNKNOWN_CYCLES
-    };
-
-
     if(cpu == NULL){
        raiseError(UNALLOC_CPU, cpu);
     }
