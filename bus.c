@@ -91,6 +91,7 @@ byte debug_read_do_not_use_pls(word address){
 
 
 static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
+    handleErrors(cpu);
     printf("\n--name: %s opcode: %02X address: %04X    %d %p\n", 
         cpu->opcodes[opcode].name, 
         opcode, 

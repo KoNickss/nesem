@@ -1,4 +1,4 @@
-CC = clang
+CC = cc
 CFLAGS = -g -DDEBUG -static
 RM = rm -rf
 OUTFILE = exec
@@ -7,7 +7,7 @@ OUTFILE = exec
 default: all
 
 all:
-	$(CC) bus.c cpu.c cartridge.c -o $(OUTFILE)
+	$(CC) bus.c cpu.c cartridge.c ppu.c -Ofast -o $(OUTFILE)
 
 clean:
 	$(RM) $(OUTFILE)
