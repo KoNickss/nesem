@@ -112,6 +112,13 @@ void activateCpuNmi(){
 
 int main(int argc, char * argv[]){
 
+    #ifdef DEBUG
+        locationRegister testbit;
+        testbit.data = 0;
+        testbit.field.fineY = 0xFF;
+        printf("%016x", testbit.data);
+    #endif
+
     activateCpuNmiBool = false;
 
     CPU * cpu = (CPU*)malloc(sizeof(CPU)); //create new CPU

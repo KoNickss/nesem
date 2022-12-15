@@ -5,14 +5,20 @@
 
 typedef struct{
     union{
-        struct{
-            byte unused : 1;
-            byte fineY : 3;
-            byte nameTableID : 2;
-            byte coarseY : 5;
+        struct __attribute__((packed, aligned(1))){
             byte coarseX : 5;
+            byte coarseY : 5;
+            byte nameTableID : 2;
+            byte fineY : 3;
+            byte unused: 1;
 
-        }bits;
+        }field;
+
+        struct{
+            byte lsb;
+            byte msb;
+
+        }bytes;
 
         word data;
     };
