@@ -1,16 +1,17 @@
 CC = cc
-CFLAGS = -g -DDEBUG -static
+CFLAGS = -static -Ofast
+CDEBUGFLAGS = -g -DDEBUG -static
 RM = rm -rf
-OUTFILE = exec
+OUTFILE = nesem
 
 
 default: all
 
 all:
-	$(CC) bus.c cpu.c cartridge.c ppu.c -Ofast -o $(OUTFILE)
+	$(CC) $(CFLAGS) bus.c cpu.c cartridge.c ppu.c -o $(OUTFILE)
 
 clean:
 	$(RM) $(OUTFILE)
 	
 debug:
-	$(CC) $(CFLAGS) bus.c cpu.c ppu.c cartridge.c -o $(OUTFILE)
+	$(CC) $(CDEBUGFLAGS) bus.c cpu.c ppu.c cartridge.c -o $(OUTFILE)

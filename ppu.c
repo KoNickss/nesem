@@ -28,12 +28,12 @@ fixed
 word resolveAttributeTableAddress(word regData){
     locationRegister n;
     n.data = regData;
-    byte trimmedCoarseX = n.bits.coarseX >> 2; //trim the lowest 2 bits of coarse X
-    byte trimmedCoarseY = n.bits.coarseY >> 2; //trim the lowest 2 bits of coarse Y
+    byte trimmedCoarseX = n.field.coarseX >> 2; //trim the lowest 2 bits of coarse X
+    byte trimmedCoarseY = n.field.coarseY >> 2; //trim the lowest 2 bits of coarse Y
 
     word ret = trimmedCoarseX | (trimmedCoarseY << 3); //YYYXXX
     ret = 0b1111 >> 6 | ret; //1111YYYXXX
-    ret = n.bits.nameTableID << 10 | ret; //NN1111YYYXXX
+    ret = n.field.nameTableID << 10 | ret; //NN1111YYYXXX
     ret = 0b10 << 12 | ret; //10NN1111YYYXXX
 
     return ret;
@@ -106,7 +106,7 @@ void ppuRegWrite(word address, byte data){
         case 0: //ppuctrl
 
             ppu.control.full = data;
-            ppu.tReg.bits.nameTableID = ppu.control.nameTableID;
+            ppu.tReg.field.nameTableID = ppu.control.nameTableID;
 
         break;
 
@@ -134,12 +134,12 @@ void ppuRegWrite(word address, byte data){
 
             if(ppu.expectingLsb){
                 //second write
-                ppu.tReg.bits.fineY = data & 0b00000111; //set fineY
-                ppu.tReg.bits.coarseY = data >> 3; //set coarse Y
+                ppu.tReg.field.fineY = data & 0b00000111; //set fineY
+                ppu.tReg.field.coarseY = data >> 3; //set coarse Y
             }else{
                 //first write
                 ppu.xReg = data & 0b00000111; //set fineX
-                ppu.tReg.bits.coarseX = data >> 3; //set coarse X
+                ppu.tReg.field.coarseX = data >> 3; //set coarse X
             }
 
             ppu.expectingLsb = !ppu.expectingLsb;
@@ -162,7 +162,7 @@ void ppuRegWrite(word address, byte data){
                 buf = buf | (ppu.tReg.data & 0xFF);
                 ppu.tReg.data = buf;
 
-                ppu.tReg.bits.fineY = ppu.tReg.bits.fineY & 0b011; //clear highest bit of fine Y
+                ppu.tReg.field.fineY = ppu.tReg.field.fineY & 0b011; //clear highest bit of fine Y
             }
 
             ppu.expectingLsb = !ppu.expectingLsb;

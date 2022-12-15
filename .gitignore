@@ -1,7 +1,9 @@
 media
 exec
+nesem
 *log*
 *cache*
 *.patch
 *.out
 *dump*
+*.json
