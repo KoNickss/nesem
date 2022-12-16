@@ -65,7 +65,8 @@ busTransaction ZPGY(CPU * __restrict__ cpu, word bytes){
 
 busTransaction REL(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
-    x.address = cpu->PC + (byte)bytes;
+    byte offset = (byte)bytes;
+    x.address = cpu->PC + *(char*)&offset; //typecast offset to convert it into a signed number
     x.value = busRead8(x.address);
     return x;
 }

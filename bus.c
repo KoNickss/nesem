@@ -97,7 +97,7 @@ static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
         opcode, 
         cpu->PC,  
         cpu->opcodes[opcode].bytes, 
-        &cpu->opcodes[opcode].microcode
+        cpu->opcodes[opcode].microcode
     );
 }
 
@@ -106,9 +106,6 @@ void activateCpuNmi(){
     activateCpuNmiBool = true;
 }
 
-
-
-#define PROG_START_ADDR 0xC000
 
 int main(int argc, char * argv[]){
 
@@ -132,7 +129,6 @@ int main(int argc, char * argv[]){
     #endif
 
     initCpu(cpu); //put new CPU in starting mode and dock it to the bus
-    cpu->PC = PROG_START_ADDR;
 
     if(argc <= 1){ //Check to see if a rom was given
         fprintf(stderr, "ERR: No Rom file Specified in Arguments\n");
@@ -141,6 +137,7 @@ int main(int argc, char * argv[]){
 
     //load the CHR and PRG banks from the .nes file (argv[1]), also loads the header for mapper construction
     initBanks(argv[1]);
+    cpu->PC = rom_start_address;
 
     #ifdef DEBUG
         //Test to see if writing to the bus is working correctly
@@ -171,14 +168,12 @@ int main(int argc, char * argv[]){
     #endif
 
 
-    for(long iterations = 0; iterations != 9000; iterations++){
-
+    while(true){
         #ifdef DEBUG
             fprintf(PClogFILE, "%4X\n", cpu->PC);
             debug_print_instruction(cpu, busRead8(cpu->PC));
             printRegisters(cpu);
             printCpu(cpu);      
-            printf("\n\n----\n%i\n-----", iterations);
         #endif
         
         if(activateCpuNmiBool){
@@ -187,6 +182,9 @@ int main(int argc, char * argv[]){
         }
         //RUN THE CPU CLOCK ONE TIME
         cpuClock(cpu);
+        #ifdef DEBUG
+            getchar();
+        #endif
     }
     
     #ifdef DEBUG

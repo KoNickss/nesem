@@ -7,6 +7,8 @@ byte CHRROM[0xFFFF];
 
 word not_handling_this = 0x100; //0xFF + 1
 
+word rom_start_address = 0x0;
+
 void loadRomfileHeader(FILE * romfile){
     byte verificationToken[3] = "NES";
     for(byte i = 0; i < 3; i++)
@@ -21,6 +23,9 @@ void loadRomfileHeader(FILE * romfile){
 
     for(byte i = 0; i < 5; i++){
         Header.flags.array[i] = getc(romfile);
+    }
+    for(byte i = 0; i < 5; i++){ //Remove padding
+        getc(romfile);
     }
 }
 
@@ -48,8 +53,12 @@ void initBanks(char name[]){
     for(word i = 0; i < GET_CHR_BANK_SIZE(Header.CHR_BANKS); i++){
         CHRROM[i] = getc(romfile);
     }
-    
+
     fclose(romfile);
+
+    //Read rom start Address
+    #define ROM_START_VECTOR_ADDR (0xFFFC)
+    rom_start_address = busRead16(ROM_START_VECTOR_ADDR);
 }
 
 word mapper000_Read(word address, bool ppu){
