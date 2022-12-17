@@ -504,17 +504,7 @@ void JMP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 }
 
 void LDA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
-    
-    
-
-    #ifdef DEBUG
-        //0x00D01C location of error
-        if(cpu->PC == 0x00D01C) {
-            printf("LDA A = %X, VAL = %X, VALUE HIGH BYTE = %X\n", cpu->A, x.value, debug_read_do_not_use_pls(0x200));
-        }
-    #endif
-    
+    busTransaction x = addressing(cpu, bytes); //check line 85 for details    
     cpu->A = x.value;
     cpu->SR.flags.Zero = (cpu->A == 0);
     cpu->SR.flags.Negative = cpu->A >> 7;
@@ -680,15 +670,13 @@ void TYA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SR.flags.Negative = cpu->A >> 7;
 }
 
-void init_opcodereg(CPU * cpu){ //opcode code defined starting line 139
+void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
 
     cpu->opcodes = (struct instruction*)malloc(sizeof(struct instruction) * 0xFF); //allow memory for opcode array in cpu_opcodereg.h
-    #ifdef DEBUG
-        if(cpu->opcodes == NULL){
-            fprintf(stderr, "ERR: Out of Memory\n");
-            exit(EXIT_FAILURE);
-        }
-    #endif
+    if(cpu->opcodes == NULL){
+        fprintf(stderr, "ERR: Out of Memory\n");
+        exit(EXIT_FAILURE);
+    }
 
     //BRK codes
 
@@ -1797,8 +1785,8 @@ void printCpu(CPU * __restrict__ cpu){
 
     printf("SR: "BYTE_TO_BINARY_PATTERN "\n", BYTE_TO_BINARY(cpu->SR.data));
     printf("SR.data: 0x%02X\n", cpu->SR.data);
-  #undef BYTE_TO_BINARY_PATTERN
-  #undef BYTE_TO_BINARY
+    #undef BYTE_TO_BINARY_PATTERN
+    #undef BYTE_TO_BINARY
 }
 
 enum ERRORS{
@@ -1909,7 +1897,7 @@ void initCpu(CPU * __restrict__ cpu){
     cpu->SR.data = 0x6C;
     cpu->SP = 0xFD;
     
-    init_opcodereg(cpu);//import the stuff about each microcode, stuff like bytes per instruction, cycles, adressing mode, and operation in the array, where the value in the array is the byte that triggers that action for the CPU
+    initOpcodeReg(cpu);//import the stuff about each microcode, stuff like bytes per instruction, cycles, adressing mode, and operation in the array, where the value in the array is the byte that triggers that action for the CPU
 }
 
 void cpuNmi(CPU * cpu){
@@ -1933,9 +1921,8 @@ void cpuNmi(CPU * cpu){
 
 void cpuClock(CPU * cpu){
 
-    #ifdef DEBUG
-        handleErrors(cpu);
-    #endif
+    
+    handleErrors(cpu);
 
     cpu->pcNeedsInc = true;
     word args = 0;
@@ -1950,11 +1937,22 @@ void cpuClock(CPU * cpu){
 
     byte sizeOfInstruction = cpu->opcodes[busRead8(cpu->PC)].bytes;
 
+    //
+    //
     //EXECUTION HERE
+    //
+    //
 
-    cpu->opcodes[busRead8(cpu->PC)].microcode(cpu, args, cpu->opcodes[busRead8(cpu->PC)].mode); //execute opcode function
+    byte execOPdata = busRead8(cpu->PC); //get OPCODE byte (ex 0x4C)
+    struct instruction execOP = cpu->opcodes[execOPdata]; //fetch OPCODE data, addressing mode and microcode (ex 0x4C -> JMP)
 
+    execOP.microcode(cpu, args, execOP.mode); //EXECUTE OPCODE
+
+    //
+    //
     //EXECUTION DONE
+    //
+    //
 
     if(cpu->pcNeedsInc){
         cpu->PC += sizeOfInstruction;
@@ -1962,5 +1960,5 @@ void cpuClock(CPU * cpu){
         #ifdef DEBUG
             printf("\n%04X %04X\n", cpu->PC - sizeOfInstruction, cpu->PC);
         #endif
-    } //increase program counter
+    } //increase program counter to move on to the next instruction
 }

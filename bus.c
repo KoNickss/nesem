@@ -137,8 +137,8 @@ int main(int argc, char * argv[]){
 
 
     while(true){
+
         #ifdef DEBUG
-            fprintf(PClogFILE, "%4X\n", cpu->PC);
             debug_print_instruction(cpu, busRead8(cpu->PC));
             printRegisters(cpu);
             printCpu(cpu);      
