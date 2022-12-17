@@ -4,7 +4,7 @@
 //extern? void (*mapper_read)(word);
 //void (*mapper_write)(bool);
 
-extern word rom_start_address;
+extern word romStartAddress;
 
 #define K_SIZE 1024
 

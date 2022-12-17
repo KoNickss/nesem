@@ -15,3 +15,6 @@ clean:
 	
 debug:
 	$(CC) $(CDEBUGFLAGS) bus.c cpu.c ppu.c cartridge.c -o $(OUTFILE)
+
+debug-tickonclick:
+	$(CC) $(CDEBUGFLAGS) -DTICKONKEY bus.c cpu.c ppu.c cartridge.c -o $(OUTFILE)

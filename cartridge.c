@@ -7,7 +7,7 @@ byte CHRROM[0xFFFF];
 
 word not_handling_this = 0x100; //0xFF + 1
 
-word rom_start_address = 0x0;
+word romStartAddress = 0x0;
 
 void loadRomfileHeader(FILE * romfile){
     byte verificationToken[3] = "NES";
@@ -24,7 +24,7 @@ void loadRomfileHeader(FILE * romfile){
     for(byte i = 0; i < 5; i++){
         Header.flags.array[i] = getc(romfile);
     }
-    for(byte i = 0; i < 5; i++){ //Remove padding
+    for(byte i = 0; i < 4; i++){ //Remove padding
         getc(romfile);
     }
 }
@@ -33,12 +33,10 @@ void initBanks(char name[]){
     FILE * romfile;
     romfile = fopen(name, "rb");
 
-    #ifdef DEBUG
-        if(romfile == NULL){
-            fprintf(stderr, "ERR: file \"%s\" could not be opened for reading!\n", name);
-            exit(EXIT_FAILURE);
-        }
-    #endif
+    if(romfile == NULL){
+        fprintf(stderr, "ERR: file \"%s\" could not be opened for reading!\n", name);
+        exit(EXIT_FAILURE);
+    }
     
     loadRomfileHeader(romfile);
     
@@ -58,7 +56,7 @@ void initBanks(char name[]){
 
     //Read rom start Address
     #define ROM_START_VECTOR_ADDR (0xFFFC)
-    rom_start_address = busRead16(ROM_START_VECTOR_ADDR);
+    romStartAddress = busRead16(ROM_START_VECTOR_ADDR);
 }
 
 word mapper000_Read(word address, bool ppu){
@@ -67,9 +65,9 @@ word mapper000_Read(word address, bool ppu){
             return not_handling_this; //not_handling_this is a 16 bit data integer, no byte will return this ever so this is our "not handling this" return code
         }else{
             if(Header.PRG_BANKS > 1){ //32K model
-                return PRGROM[address - 0x8000 + 0x4];
+                return PRGROM[address - 0x8000];
             }else{ //16K model
-                return PRGROM[(address - 0x8000 + 0x4) % 0x3FFF];
+                return PRGROM[(address - 0x8000) % 0x3FFF];
             }
         }
     }else{ //if PPU

@@ -107,26 +107,21 @@ void activateCpuNmi(){
 }
 
 
-int main(int argc, char * argv[]){
 
-    #ifdef DEBUG
-        locationRegister testbit;
-        testbit.data = 0;
-        testbit.field.fineY = 0xFF;
-        printf("%016x", testbit.data);
-    #endif
+
+
+
+
+
+
+
+
+
+int main(int argc, char * argv[]){
 
     activateCpuNmiBool = false;
 
     CPU * cpu = (CPU*)malloc(sizeof(CPU)); //create new CPU
-
-
-    #ifdef DEBUG
-        if(cpu == NULL){
-            fprintf(stderr, "ERR: Out of RAM!\n");
-            exit(EXIT_FAILURE);
-        }
-    #endif
 
     initCpu(cpu); //put new CPU in starting mode and dock it to the bus
 
@@ -137,35 +132,8 @@ int main(int argc, char * argv[]){
 
     //load the CHR and PRG banks from the .nes file (argv[1]), also loads the header for mapper construction
     initBanks(argv[1]);
-    cpu->PC = rom_start_address;
-
-    #ifdef DEBUG
-        //Test to see if writing to the bus is working correctly
-        busWrite8(0x0000, 0xFF);
-        printf("\n---- ---- %02X %02X\n", busRead8(0x0000), bus[0x0000]);
-
-
-        //open debug PC logfile
-        FILE * PClogFILE;
-        PClogFILE = fopen("PClogFILE", "w");
-    #endif
-
-    #ifdef DEBUG
-        //ppu tests
-        printf("\nCACA\n");
-        printf("\nt\n");
-        initPpu();
-        printf("\nk\n");
-        ppuRegWrite(0x2006, 0x00);
-        printf("\nok\n");
-        ppuRegWrite(0x2006, 0x10);
-        printf("\nok1\n");
-        ppuRegWrite(0x2007, 0x22);
-        printf("\nok2\n");
-        ppuRegWrite(0x2007, 0x33);
-        printf("\nok3\n");
-        dumpPpuBus();
-    #endif
+    //cpu->PC = romStartAddress; NOT FUNC YET
+    cpu->PC = 0xC000; 
 
 
     while(true){
@@ -180,10 +148,20 @@ int main(int argc, char * argv[]){
             cpuNmi(cpu);
             activateCpuNmiBool = false;
         }
+
+        //
+        //
         //RUN THE CPU CLOCK ONE TIME
         cpuClock(cpu);
+        //
+        //
+        //
+
+
         #ifdef DEBUG
-            getchar();
+            #ifdef TICKONKEY
+                getchar();
+            #endif
         #endif
     }
     
