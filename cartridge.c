@@ -24,7 +24,7 @@ void loadRomfileHeader(FILE * romfile){
     for(byte i = 0; i < 5; i++){
         Header.flags.array[i] = getc(romfile);
     }
-    for(byte i = 0; i < 4; i++){ //Remove padding
+    for(byte i = 0; i < 5; i++){ //Remove padding
         getc(romfile);
     }
 }
@@ -52,6 +52,13 @@ void initBanks(char name[]){
         CHRROM[i] = getc(romfile);
     }
 
+    unsigned long read_size = ftell(romfile);
+    fseek(romfile, 0, SEEK_END);
+    unsigned long file_size = ftell(romfile);
+    if(read_size != file_size){
+      fprintf(stderr, "WARNING: Bytes read does not match the file size! Nesem Reported = 0x%lX, File Size = 0x%lX!\n", read_size, file_size);
+    }
+
     fclose(romfile);
 
     //Read rom start Address
@@ -67,7 +74,7 @@ word mapper000_Read(word address, bool ppu){
             if(Header.PRG_BANKS > 1){ //32K model
                 return PRGROM[address - 0x8000];
             }else{ //16K model
-                return PRGROM[(address - 0x8000) % 0x3FFF];
+                return PRGROM[(address - 0x8000) % 0x4000];
             }
         }
     }else{ //if PPU

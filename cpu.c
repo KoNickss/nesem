@@ -1822,14 +1822,14 @@ void raiseError(unsigned int err, CPU * __restrict__ cpu){
         "Cycles was allocated but not set",
     };
 
-    fprintf(stderr, "%s", ERROR_STR[err]);
+    fprintf(stderr, "%s\n", ERROR_STR[err]);
         fprintf(stderr, "CRASH!!!!\n\n");
         fprintf(stderr, "\tLOCATION: %#06x\n", cpu->PC);
         fprintf(stderr, "\tOPCODE: %#06x\n", busRead8(cpu->PC));
         if(err != UNALLOC_NAME && err != UNALLOC_MICRO)
             fprintf(stderr, "\tNAME: \"%s\"\n", cpu->opcodes[busRead8(cpu->PC)].name);
         else
-            fprintf(stderr, "\tNAME: \"%s\"\n", NULL);
+            fprintf(stderr, "\tNAME: \"(NULL)\"\n");
         fprintf(stderr, "\tMICRO: %p\n", cpu->opcodes[busRead8(cpu->PC)].microcode);
         fprintf(stderr, "\tMODE: %p\n", cpu->opcodes[busRead8(cpu->PC)].mode);
     exit(err);
@@ -1878,9 +1878,11 @@ void handleErrors(CPU * __restrict__ cpu){
     if(cur_inst.bytes == 0){
         raiseError(UNKNOWN_BYTES, cpu);
     }
+    /*
     if(cur_inst.microcode < ORA || cur_inst.microcode > TYA){
         raiseError(UNKNOWN_MICRO, cpu);
     }
+    */
 
     printf("OP: %x\n", busRead8(cpu->PC));
 }

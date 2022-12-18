@@ -1,4 +1,5 @@
 #include "bus.h"
+#include <string.h>
 
 bool debug = true;
 
@@ -113,8 +114,7 @@ void activateCpuNmi(){
 
 
 
-
-
+#define ROM_TEST_NAME ("nestest.nes")
 
 
 int main(int argc, char * argv[]){
@@ -132,9 +132,15 @@ int main(int argc, char * argv[]){
 
     //load the CHR and PRG banks from the .nes file (argv[1]), also loads the header for mapper construction
     initBanks(argv[1]);
-    //cpu->PC = romStartAddress; NOT FUNC YET
-    cpu->PC = 0xC000; 
-
+    if(strstr(argv[1], ROM_TEST_NAME)){
+        if(strlen(strstr(argv[1], ROM_TEST_NAME)) == strlen(ROM_TEST_NAME)){ //Load test rom at 0xC000
+            cpu->PC = 0xC000; 
+        }else{
+            cpu->PC = romStartAddress; //Rom was in a folder called 'ROM_TEST_NAME' rather than loading a file with the same name
+        }
+    }else{
+        cpu->PC = romStartAddress; //Rom was not a test rom. Load normally
+    }
 
     while(true){
 
