@@ -179,7 +179,7 @@ void ppuRegWrite(word address, byte data){
         break;
 
         default:
-            fprintf(stderr, "ERR: Invalid write to PPU register of address %llX\n!", address + 0x2000);
+            fprintf(stderr, "ERR: Invalid write to PPU register of address %X\n!", address + 0x2000);
             abort();
         break;
     }
@@ -248,7 +248,7 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
         break;
 
         default:
-            fprintf(stderr, "ERR: Invalid read to PPU register of address %llX\n!", address + 0x2000);
+            fprintf(stderr, "ERR: Invalid read to PPU register of address %X\n!", address + 0x2000);
             abort();
         break;
     }
