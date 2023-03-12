@@ -4,11 +4,11 @@
 #include "cartridge.h" //needs acces to the cartridge to load CHR maps, since r/w functions are in-house instead of bus-wide like it is for busRead/Write it needs to be imported here too, quite like there are physical wires connecting the cartridge CHR bank pins to the PPU
 
 #define PPU_BUS_SIZE (0x3FFF)
-byte ppuBus[PPU_BUS_SIZE];
+static byte ppuBus[PPU_BUS_SIZE];
 
 PPU ppu;
 
-inline word resolveNameTableAddress(word regData){
+static inline word resolveNameTableAddress(word regData){
     return (regData & 0b0000111111111111) | (1 << (14 - 1));
 }
 
@@ -25,7 +25,7 @@ inline word resolveNameTableAddress(word regData){
 fixed
 */
 
-word resolveAttributeTableAddress(word regData){
+static word resolveAttributeTableAddress(word regData){
     locationRegister n;
     n.data = regData;
     byte trimmedCoarseX = n.field.coarseX >> 2; //trim the lowest 2 bits of coarse X
@@ -65,7 +65,7 @@ fixed
 //
 // ----
 
-byte ppuRead(word address){
+static byte ppuRead(word address){
 
     word cartResponse;
 
@@ -84,7 +84,7 @@ byte ppuRead(word address){
 
 }
 
-void ppuWrite(word address, byte data){
+static void ppuWrite(word address, byte data){
 
     if(!mapper000_Write(address, data, true)){
 
@@ -206,9 +206,10 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
 
         case 2: //ppustatus
 
-            return ppu.status.full;
+            returnData = ppu.status.full;
             ppu.status.vblank = 0;
             ppu.expectingLsb = false;
+            return returnData;
 
         break;
 
@@ -263,6 +264,13 @@ void dumpPpuBus(){
 
 }
 
+//Clean up any left over memory from a reset
+static void sterlize_ppu(){
+    for(unsigned int i = 0; i < PPU_BUS_SIZE; i++){
+        ppuBus[i] = 0x00;
+    }
+}
+
 void initPpu(){
     ppu.dataByteBuffer = 0;
     ppu.expectingLsb = 0;
@@ -270,11 +278,90 @@ void initPpu(){
     ppu.dataByteBuffer = 0;
     ppu.mask.full = 0;
     ppu.status.full = 0;
+    sterlize_ppu();
 }
+
+static int cycle = 0;
+static int scanline = 0;
+
+static byte NTbuf;
+static byte ATbuf;
+static byte bgLSBbuf;
+static byte bgMSBbuf;
 
 void ppuClock(){
     //one tick of the PPU clock
+#if 0
+    if(cycle % 8){
+        if(cycle > 0){
+            if(cycle - 1 % 2){
+                //High Byte
+            }else{
+                //Low Byte
+            }
+        }else{
+            //H-BLANK
+        }
+    }
+#endif
 
+    if(scanline >= 0 && scanline <= 239){
+        //visible area
+        if(scanline == -1 && cycle == 1)
+            ppu.status.vblank = 0;
+
+        if((cycle >= 2 && cycle <= 257) || (cycle >= 321 && cycle <= 337)){
+            switch((cycle - 1) % 8){
+                
+                case 0:
+                    //READ NameTable BYTE
+                    NTbuf = ppuBus[resolveNameTableAddress(ppu.vReg.data)];
+                break;
+                
+                
+                case 2:
+                    //READ AttributeTable BYTE
+                    ATbuf = ppuBus[resolveAttributeTableAddress(ppu.vReg.data)];
+                break;
+                
+                
+                case 4:
+                    //READ bg lsb
+                    bgLSBbuf = ppuBus[(ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 0];
+                break;
+                
+                
+                
+                case 6:
+                    bgMSBbuf = ppuBus[(ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 8];
+                break;
+
+                case 7:
+                    
+                break;
+
+                default:
+                    //In-between cycles
+                break;
+            }
+        }
+    }
+
+    //SCANLINE over and reset counters
+    if(cycle >= 341){
+        cycle -= 341;
+        scanline++;
+    }
+
+    if(scanline == 241){
+        ppu.control.nmiVerticalBlank = true;
+        ppu.status.vblank = true;
+    }
     
+    if(scanline >= 262){
+        scanline = 0;
+        ppu.status.vblank = false;
+        ppu.control.nmiVerticalBlank = false;
+    }
 
 }
