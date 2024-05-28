@@ -17,8 +17,6 @@ unsigned char bus[BUS_SIZE]; //this is the bus array
 
 #include "cartridge.h"
 
-bool activateCpuNmiBool = false;
-
 #define TRANSLATE_PPU_ADDRESS(address) ((address - 0x2000) % 8 + 0x2000)
 
 void busWrite8(word address, word data){
@@ -104,12 +102,6 @@ static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
 }
 
 
-void activateCpuNmi(){
-    activateCpuNmiBool = true;
-}
-
-
-
 
 
 
@@ -119,9 +111,6 @@ void activateCpuNmi(){
 
 
 int main(int argc, char * argv[]){
-
-    activateCpuNmiBool = false;
-
     CPU * cpu = (CPU*)malloc(sizeof(CPU)); //create new CPU
 
     initCpu(cpu); //put new CPU in starting mode and dock it to the bus
@@ -155,9 +144,9 @@ int main(int argc, char * argv[]){
             #endif  
         #endif
 
-        if(activateCpuNmiBool){
+        if(ppuGetNmiStatus()){
+            ppuClearNmiStatus();
             cpuNmi(cpu);
-            activateCpuNmiBool = false;
         }
 
         //
