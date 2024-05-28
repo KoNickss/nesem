@@ -114,6 +114,7 @@ typedef struct{
 
 void initPpu();
 void dumpPpuBus();
+void ppuClock(void);
 
 void ppuRegWrite(word address, byte data);
 byte ppuRegRead(word address);

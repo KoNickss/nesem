@@ -1,6 +1,9 @@
 #include "bus.h"
 #include <string.h>
 
+//For displaying to the screen
+#include "window.h"
+
 bool debug = true;
 
 
@@ -16,6 +19,7 @@ unsigned char bus[BUS_SIZE]; //this is the bus array
 
 bool activateCpuNmiBool = false;
 
+#define TRANSLATE_PPU_ADDRESS(address) ((address - 0x2000) % 8 + 0x2000)
 
 void busWrite8(word address, word data){
     if(!mapper000_Write(address, data, false)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
@@ -25,17 +29,10 @@ void busWrite8(word address, word data){
 
 
         if(0x2000 <= address && address <= 0x3FFF){
-            //ppu stuff in the future
-            address = (address - 0x2000) % 8 + 0x2000;
-			byte* data_array = (byte*)&data;
-            ppuRegWrite(address, data_array[0]);
-            ppuRegWrite(address, data_array[1]);
+            address = TRANSLATE_PPU_ADDRESS(address);
+            ppuRegWrite(address, data & 0xFF);
             return;
         }
-
-        #ifdef DEBUG
-            printf("\nwrite-ram at 0x%04X val = 0x%04X\n; old_val 0x%04X", address, data, busRead8(address));
-        #endif
 
         bus[address] = (unsigned char)data;
     }
@@ -51,8 +48,7 @@ word busRead8(word address){
 
 
         if(0x2000 <= address && address <= 0x3FFF){
-            //ppu stuff in the future
-            address = (address - 0x2000) % 8 + 0x2000;
+            address = TRANSLATE_PPU_ADDRESS(address);
             return ppuRegRead(address);
         }
 
@@ -152,11 +148,13 @@ int main(int argc, char * argv[]){
     while(true){
 
         #ifdef DEBUG
-            debug_print_instruction(cpu, busRead8(cpu->PC));
-            printRegisters(cpu);
-            printCpu(cpu);      
+            #if 0
+                debug_print_instruction(cpu, busRead8(cpu->PC));
+                printRegisters(cpu);
+                printCpu(cpu);    
+            #endif  
         #endif
-        
+
         if(activateCpuNmiBool){
             cpuNmi(cpu);
             activateCpuNmiBool = false;
@@ -166,6 +164,10 @@ int main(int argc, char * argv[]){
         //
         //RUN THE CPU CLOCK ONE TIME
         cpuClock(cpu);
+        debug_print_instruction(cpu, busRead8(cpu->PC));
+        ppuClock();
+        ppuClock();
+        ppuClock();
         //
         //
         //

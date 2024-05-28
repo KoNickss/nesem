@@ -3,6 +3,8 @@
 
 #include "cartridge.h" //needs acces to the cartridge to load CHR maps, since r/w functions are in-house instead of bus-wide like it is for busRead/Write it needs to be imported here too, quite like there are physical wires connecting the cartridge CHR bank pins to the PPU
 #include <pthread.h>
+#include <unistd.h>
+#include "window.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
@@ -78,11 +80,11 @@ static byte ppuRead(word address){
 
     if((cartResponse = mapper000_Read(address, true)) == 0x0100){
 
-        if(address >= 0x3000 && 0x3EFF <= address) //mirrored region
+        if(address >= 0x3000 && address <= 0x3EFF) //mirrored region of nametables
             address -= 0x1000;
 
-        if(address >= 0x3F20 && 0x3FFF <= address) //mirrored region
-            address = (address - 0x3F00) % 0x20 + 0x3F00;
+        if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
+            address = (address - 0x3F20) % 0x20 + 0x3F00;
 
         return ppuBus[address];
     }
@@ -95,11 +97,11 @@ static void ppuWrite(word address, byte data){
 
     if(!mapper000_Write(address, data, true)){
 
-        if(address >= 0x3000 && 0x3EFF <= address) //mirrored region
+        if(address >= 0x3000 && address <= 0x3EFF) //mirrored region of nametables
             address -= 0x1000;
 
-        if(address >= 0x3F20 && 0x3FFF <= address) //mirrored region
-            address = (address - 0x3F00) % 0x20 + 0x3F00;
+        if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
+            address = (address - 0x3F20) % 0x20 + 0x3F00;
 
         ppuBus[address] = data;
     }
@@ -277,6 +279,8 @@ static void sterlize_ppu(){
     }
 }
 
+#define PPU_WIDTH 341
+#define PPU_HEIGHT 241
 void initPpu(){
     ppu.dataByteBuffer = 0;
     ppu.expectingLsb = 0;
@@ -286,7 +290,9 @@ void initPpu(){
     ppu.status.full = 0;
     sterlize_ppu();
 
-    pthread_create(&ppuThread_id, NULL, ppuThread, NULL);
+    window_init(PPU_WIDTH, PPU_HEIGHT);
+
+    //pthread_create(&ppuThread_id, NULL, ppuThread, NULL);
 }
 
 static int cycle = 0;
@@ -306,17 +312,20 @@ static const int TEST_COLORS[4] = {
 	0xFFFFFF00  //Light-blue non-transparent
 };
 
-#define PPU_WIDTH 341
-#define PPU_HEIGHT 241
 static unsigned int img_data[PPU_WIDTH * PPU_HEIGHT];
 static word crt_x = 0;
 
+
+#define NORMAL_PUTROW 1
+#define FORCE_NAMETABLE_DRAW 1
+
 #define ppuPutTile_getHighestBit(val) ((val >> 7) & 0b1)
 static void ppuPutTileRow(){
-#if 0
+#if !NORMAL_PUTROW
 	byte selected_color;
-    int tile_offset = 32;
-    for(int tile_num = 0; tile_num < 32; tile_num++){
+    int tile_offset = 0;
+    #if !FORCE_NAMETABLE_DRAW
+    for(int tile_num = 0; tile_num < 32*32; tile_num++){
         for(int y = 0; y < 8; y++){
             bgLSBbuf = ppuRead(y + (tile_num + tile_offset)*16);
             bgMSBbuf = ppuRead(y + 8 + (tile_num+tile_offset)*16);
@@ -325,7 +334,7 @@ static void ppuPutTileRow(){
                 selected_color |= ppuPutTile_getHighestBit(bgMSBbuf) << 1;
 
                 unsigned long selected_pixel = PPU_WIDTH * scanline + crt_x + x;
-                selected_pixel = PPU_WIDTH * (y) + x + ((tile_num%32) * 8);
+                selected_pixel = PPU_WIDTH * (y + ((tile_num/32)*8)) + x + ((tile_num%32) * 8);
                 if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
                     fprintf(stderr, "WARN: Out of bounds PPU access\n");
                 }else{
@@ -338,9 +347,33 @@ static void ppuPutTileRow(){
         }
     }
     crt_x += 8;
+    #else
+    for(int i = 0; i < 0x300; i++){
+        int tile_num = ppuRead(0x2000 + i);
+        for(int y = 0; y < 8; y++){
+            bgLSBbuf = ppuRead(y + (tile_num + tile_offset)*16);
+            bgMSBbuf = ppuRead(y + 8 + (tile_num+tile_offset)*16);
+            for(int x = 0; x < 8; x++){
+                selected_color = ppuPutTile_getHighestBit(bgLSBbuf);
+                selected_color |= ppuPutTile_getHighestBit(bgMSBbuf) << 1;
+
+                unsigned long selected_pixel = PPU_WIDTH * scanline + crt_x + x;
+                selected_pixel = PPU_WIDTH * (y+((i/32)*8)) + x + ((i%32) * 8);
+                if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
+                    fprintf(stderr, "WARN: Out of bounds PPU access\n");
+                }else{
+                    img_data[selected_pixel] = TEST_COLORS[selected_color];
+                }
+                        
+                bgLSBbuf <<= 1;
+                bgMSBbuf <<= 1;
+            }
+        }
+    }
+    crt_x += 8;
+    #endif
 #else
 	byte selected_color;
-    int tile_offset = 32;
     for(int x = 0; x < 8; x++){
         selected_color = ppuPutTile_getHighestBit(bgLSBbuf);
         selected_color |= ppuPutTile_getHighestBit(bgMSBbuf) << 1;
@@ -360,7 +393,7 @@ static void ppuPutTileRow(){
 #endif
 }
 
-void ppuClock(){
+void ppuClock(void){
     //one tick of the PPU clock
 #if 0
     if(cycle % 8){
@@ -397,14 +430,16 @@ void ppuClock(){
                 
                 case 4:
                     //READ bg lsb
-                    bgLSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 0);//ppuBus[(ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 0];
+                    bgLSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 0);
                 break;
                 
                 
                 
                 case 6:
-                    bgMSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 8);//ppuBus[(ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 8];
-                    ppuPutTileRow();
+                    bgMSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 8);
+                    #if NORMAL_PUTROW
+                        ppuPutTileRow();
+                    #endif
                 break;
 
                 case 7:
@@ -430,7 +465,12 @@ void ppuClock(){
         ppu.control.nmiVerticalBlank = true;
         ppu.status.vblank = true;
         crt_x = 0;
-        stbi_write_png("ppu.png", PPU_WIDTH, PPU_HEIGHT, 4, img_data, PPU_WIDTH * 4);
+        #if !NORMAL_PUTROW
+            ppuPutTileRow();
+        #endif
+        //stbi_write_png("ppu.png", PPU_WIDTH, PPU_HEIGHT, 4, img_data, PPU_WIDTH * 4);
+        window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
+        //activateCpuNmi();
     }
     
     if(scanline >= 262){
@@ -443,7 +483,7 @@ void ppuClock(){
 	cycle++;
 }
 
-
+//For if we ever want the ppu to run on a different thread
 static void* ppuThread(void* args){
 
 	while(true){
