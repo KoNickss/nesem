@@ -1,4 +1,5 @@
 #include "bus.h"
+#include <stdbool.h>
 
 //Credits to wiki.nesdev.com for these register graphs
 //https://wiki.nesdev.com/w/index.php?title=PPU_registers
@@ -118,3 +119,6 @@ void ppuClock(void);
 
 void ppuRegWrite(word address, byte data);
 byte ppuRegRead(word address);
+
+bool ppuGetNmiStatus(void);
+void ppuClearNmiStatus(void);

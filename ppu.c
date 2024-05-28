@@ -21,6 +21,15 @@ static inline word resolveNameTableAddress(word regData){
     return (regData & 0b0000111111111111) | (1 << (14 - 1));
 }
 
+
+bool ppuGetNmiStatus(void){
+	return ppu.control.nmiVerticalBlank;
+}
+
+void ppuClearNmiStatus(void){
+    ppu.control.nmiVerticalBlank = false;
+}
+
 /*
 10NNYYYYYXXXXX
 10100010100011  ==> $28A3
@@ -461,7 +470,7 @@ void ppuClock(void){
         crt_x = 0;
     }
 
-    if(scanline == 241){
+    if(scanline == 241 && cycle == 0){
         ppu.control.nmiVerticalBlank = true;
         ppu.status.vblank = true;
         crt_x = 0;
@@ -470,7 +479,6 @@ void ppuClock(void){
         #endif
         //stbi_write_png("ppu.png", PPU_WIDTH, PPU_HEIGHT, 4, img_data, PPU_WIDTH * 4);
         window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
-        //activateCpuNmi();
     }
     
     if(scanline >= 262){
