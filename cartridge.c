@@ -44,13 +44,8 @@ void initBanks(char name[]){
         fseek(romfile, 512, SEEK_CUR);
     
 
-    for(word i = 0; i < GET_PRG_BANK_SIZE(Header.PRG_BANKS); i++){
-        PRGROM[i] = getc(romfile);
-    }
-
-    for(word i = 0; i < GET_CHR_BANK_SIZE(Header.CHR_BANKS); i++){
-        CHRROM[i] = getc(romfile);
-    }
+    fread(PRGROM, 1, GET_PRG_BANK_SIZE(Header.PRG_BANKS), romfile);
+    fread(CHRROM, 1, GET_PRG_BANK_SIZE(Header.CHR_BANKS), romfile);
 
     unsigned long read_size = ftell(romfile);
     fseek(romfile, 0, SEEK_END);

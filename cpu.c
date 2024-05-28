@@ -118,11 +118,6 @@ busTransaction IND(CPU * __restrict__ cpu, word bytes){
     }
 
     x.value = busRead8(x.address);
-
-    #ifdef DEBUG
-        printf("\nIND: X>ADDRESS %04X | X>VALUE %04X | BYTES %04X | busRead8(BYTES) %04X | busRead16{BYTES} %04X | busRead8(BYTES+1) %04X | busRead8(BYTES-1) %04X | busRead8(BYTES - 0xFF) %04X\n", x.address, x.value, bytes, busRead8(bytes), busRead16(bytes), busRead8(bytes + 1), busRead8(bytes - 1), busRead8(bytes - 0xFF));
-    #endif
-
     return x;
 }
 
@@ -218,10 +213,6 @@ void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x
     cpu->SP--;
 
     cpu->SR.flags.Break = 0;
-
-    #ifdef DEBUG
-        print_stack(cpu);
-    #endif
 }
 
 
@@ -256,10 +247,6 @@ void BIT(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SR.flags.Zero = !(cpu->A & x.value);
     cpu->SR.flags.Negative = (x.value >> 7) & 1;
     cpu->SR.flags.Overflow = (x.value >> 6) & 1;
-
-    #ifdef DEBUG
-        printf("\nVALUE: 0x%2X || OVF: %i || \"!!(x.value & 0b01000000)\": %i\n", x.value, cpu->SR.flags.Overflow, (!!(x.value & 0b0100000)));
-    #endif
 }
 
 void PLP(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -267,10 +254,6 @@ void PLP(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SR.data = busRead8(cpu->SP + STACK_RAM_OFFSET);
     cpu->SR.flags.Break = 0;
     cpu->SR.flags.ignored = 1;
-
-    #ifdef DEBUG
-        print_stack(cpu);
-    #endif
 }
 
 void PLA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -278,10 +261,6 @@ void PLA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->A = busRead8(cpu->SP + STACK_RAM_OFFSET);
     cpu->SR.flags.Negative = cpu->A > 7;
     cpu->SR.flags.Zero = !cpu->A;
-
-    #ifdef DEBUG
-        print_stack(cpu);
-    #endif
 }
 
 void ROL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -396,10 +375,6 @@ void CMP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 
     cpu->SR.flags.Carry = (cpu->A >= x.value);
     cpu->SR.flags.Zero = (cpu->A == x.value);
-
-    #ifdef DEBUG
-        printf("\n\n-----\nA: %i\nM: %i\n-----\n", cpu->A, x.value);
-    #endif    
 }
 
 void CPX(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -546,10 +521,6 @@ void NOP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 void PHA(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->A);
     cpu->SP--;
-
-    #ifdef DEBUG
-        print_stack(cpu);
-    #endif
 }
 
 void RTI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
@@ -565,28 +536,14 @@ void RTI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     newPC |= busRead8(cpu->SP + STACK_RAM_OFFSET) << 8; //read msb
 
     cpu->PC = newPC;
-
-    #ifdef DEBUG
-        printf("\n%04X\n", newPC);
-        print_stack(cpu);
-    #endif
 }
 
 void RTS(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->SP++;
     word newPC = busRead8(cpu->SP + STACK_RAM_OFFSET);
 
-    #ifdef DEBUG
-        printf("\n%02X\n", newPC);
-    #endif
-
     cpu->SP++;
     newPC |= busRead8(cpu->SP + STACK_RAM_OFFSET) << 8;
-
-    #ifdef DEBUG
-        printf("\n%04X\n", newPC);
-        print_stack(cpu);
-    #endif
 
     cpu->PC = newPC;
 }
@@ -1884,7 +1841,6 @@ void handleErrors(CPU * __restrict__ cpu){
     }
     */
 
-    printf("OP: %x\n", busRead8(cpu->PC));
 }
 
 /*void printErrorCodes(CPU * cpu){
@@ -1918,7 +1874,7 @@ void cpuNmi(CPU * cpu){
     busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data); //push status register to stack
     cpu->SP--;
 
-    cpu->PC = busRead8(0xFFFE) | (busRead8(0xFFFF) << 8); //read new PC from address
+    cpu->PC = busRead16(0xFFFE); //Read new address from NMI vector
 }
 
 void cpuClock(CPU * cpu){
@@ -1932,10 +1888,6 @@ void cpuClock(CPU * cpu){
         args = busRead8(cpu->PC + 2) << 8;
     }
     args |= busRead8(cpu->PC + 1); //add first arg byte
-
-    #ifdef DEBUG
-        printf("\nBYTES: 0x%04X", args);
-    #endif
 
     byte sizeOfInstruction = cpu->opcodes[busRead8(cpu->PC)].bytes;
 
@@ -1958,9 +1910,5 @@ void cpuClock(CPU * cpu){
 
     if(cpu->pcNeedsInc){
         cpu->PC += sizeOfInstruction;
-
-        #ifdef DEBUG
-            printf("\n%04X %04X\n", cpu->PC - sizeOfInstruction, cpu->PC);
-        #endif
     } //increase program counter to move on to the next instruction
 }
