@@ -20,13 +20,17 @@ bool activateCpuNmiBool = false;
 void busWrite8(word address, word data){
     if(!mapper000_Write(address, data, false)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
         
-        if(0x0000 <= address && address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+        if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
             address %= 0x07FF;
 
 
         if(0x2000 <= address && address <= 0x3FFF){
             //ppu stuff in the future
             address = (address - 0x2000) % 8 + 0x2000;
+			byte* data_array = (byte*)&data;
+            ppuRegWrite(address, data_array[0]);
+            ppuRegWrite(address, data_array[1]);
+            return;
         }
 
         #ifdef DEBUG
@@ -42,13 +46,14 @@ word busRead8(word address){
     if((data = mapper000_Read(address, false)) >= 0x100){ //we first ask the mapper to read the data from the address for us in case its on the cartridge, if it returns 0x100 (0xFF + 1 aka impossible to get from reading a byte) that means the data stored at that address is not on the cartridge, but rather on the nes memory, thus we hand the job over to the bus
         
         
-        if(0x0000 <= address && address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+        if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
             address %= 0x07FF;
 
 
         if(0x2000 <= address && address <= 0x3FFF){
             //ppu stuff in the future
             address = (address - 0x2000) % 8 + 0x2000;
+            return ppuRegRead(address);
         }
 
 
@@ -124,6 +129,8 @@ int main(int argc, char * argv[]){
     CPU * cpu = (CPU*)malloc(sizeof(CPU)); //create new CPU
 
     initCpu(cpu); //put new CPU in starting mode and dock it to the bus
+
+    initPpu(); //Create ppu thread and initalize memory
 
     if(argc <= 1){ //Check to see if a rom was given
         fprintf(stderr, "ERR: No Rom file Specified in Arguments\n");

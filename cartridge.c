@@ -78,9 +78,13 @@ word mapper000_Read(word address, bool ppu){
             }
         }
     }else{ //if PPU
-        if(Header.CHR_BANKS == 0) return not_handling_this; //if no CHR banks, nothing to mirror
-        else if (address <= 0x2000) return CHRROM[address - 0x2000];
-		else return not_handling_this;
+        if(Header.CHR_BANKS == 0){
+        	return not_handling_this; //if no CHR banks, nothing to mirror
+        }else if (address <= 0x2000){ 
+        	return CHRROM[address];
+		}else{ 
+			return not_handling_this;
+		}
     }
 }
 
