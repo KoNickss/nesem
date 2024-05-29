@@ -181,27 +181,27 @@ void AND(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 }
 
 void BRK(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x00 Hardware interupt.
-    cpu->pcNeedsInc = false;
-    cpu->PC += 2;
-    if(cpu->SR.flags.Interrupt){
-	    byte pcLsb, pcMsb;
-	    pcMsb = cpu->PC >> 8;
-	    pcLsb = cpu->PC & 0x00FF;
+	cpu->pcNeedsInc = false;
+	cpu->PC += 2;
+	cpu->SR.flags.Interrupt == true){
 
-	    busWrite8(cpu->SP + STACK_RAM_OFFSET, pcMsb);
-	    cpu->SP--;
-	    busWrite8(cpu->SP + STACK_RAM_OFFSET, pcLsb);
-	    cpu->SP--;
+	byte pcLsb, pcMsb;
+	pcMsb = cpu->PC >> 8;
+	pcLsb = cpu->PC & 0x00FF;
 
-	    cpu->SR.flags.Break = 1;
-	    busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data);
-	    cpu->SP--;
-	    cpu->SR.flags.Break = 0;
+	busWrite8(cpu->SP + STACK_RAM_OFFSET, pcMsb);
+	cpu->SP--;
+	busWrite8(cpu->SP + STACK_RAM_OFFSET, pcLsb);
+	cpu->SP--;
 
-	    word newPC = (busRead8(0xFFFF) << 8); //read MSB
-	    newPC |= busRead8(0xFFFE); //read LSB
-	    cpu->PC = newPC;
-    }
+	cpu->SR.flags.Break = 1;
+	busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data);
+	cpu->SP--;
+	cpu->SR.flags.Break = 0;
+
+	word newPC = (busRead8(0xFFFF) << 8); //read MSB
+	newPC |= busRead8(0xFFFE); //read LSB
+	cpu->PC = newPC;
 }
 
 void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x08 PHP Push Status register to the stack
