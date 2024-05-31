@@ -183,7 +183,7 @@ void AND(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 void BRK(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x00 Hardware interupt.
 	cpu->pcNeedsInc = false;
 	cpu->PC += 2;
-	cpu->SR.flags.Interrupt == true){
+	cpu->SR.flags.Interrupt = true;
 
 	byte pcLsb, pcMsb;
 	pcMsb = cpu->PC >> 8;
