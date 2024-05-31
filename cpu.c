@@ -18,6 +18,19 @@
 //REMOVE AFTER DEBUGGING DONE
 
 void print_stack(CPU * cpu);
+//////////////////////////////////
+
+
+//Gets a new PC to travel to for IRQ, NMI, and RESET
+static inline word decodeRomPCVector(word addr){
+	if(addr >= 0xFFFF || addr < 0xFFFA){
+		fprintf(stderr, "[%s] Invalid address of 0x%X!\n", __FUNCTION__, addr);
+		abort();
+	}
+	word ret = ((word)busRead8(addr + 1)) << 8;
+	ret |= busRead8(addr);
+	return ret;
+}
 
 
 busTransaction IMM(CPU * __restrict__ cpu, word bytes){
@@ -199,9 +212,7 @@ void BRK(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0
 	cpu->SP--;
 	cpu->SR.flags.Break = 0;
 
-	word newPC = (busRead8(0xFFFF) << 8); //read MSB
-	newPC |= busRead8(0xFFFE); //read LSB
-	cpu->PC = newPC;
+	cpu->PC = decodeRomPCVector(ROM_VECTOR_IRQ);
 }
 
 void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x08 PHP Push Status register to the stack
@@ -1874,7 +1885,8 @@ void cpuNmi(CPU * cpu){
     busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data); //push status register to stack
     cpu->SP--;
 
-    cpu->PC = busRead16(0xFFFE); //Read new address from NMI vector
+    //Read new address from NMI vector
+    cpu->PC = decodeRomPCVector(ROM_VECTOR_NMI);
 }
 
 void cpuClock(CPU * cpu){
