@@ -4,6 +4,9 @@
 //For displaying to the screen
 #include "window.h"
 
+//For getting controller input
+#include "controller.h"
+
 bool debug = true;
 
 
@@ -27,7 +30,7 @@ void busWrite8(word address, word data){
 
 
         if(0x2000 <= address && address <= 0x3FFF){
-            address = TRANSLATE_PPU_ADDRESS(address);
+		    address = TRANSLATE_PPU_ADDRESS(address);
             ppuRegWrite(address, data & 0xFF);
             return;
         }
@@ -37,6 +40,9 @@ void busWrite8(word address, word data){
 }
 
 word busRead8(word address){
+	if(address == 0x4016){
+		return joypad_read_bit(JOYPAD_1);
+	}
     word data;
     if((data = mapper000_Read(address, false)) >= 0x100){ //we first ask the mapper to read the data from the address for us in case its on the cartridge, if it returns 0x100 (0xFF + 1 aka impossible to get from reading a byte) that means the data stored at that address is not on the cartridge, but rather on the nes memory, thus we hand the job over to the bus
         
@@ -92,6 +98,7 @@ byte debug_read_do_not_use_pls(word address){
 
 static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
     handleErrors(cpu);
+    return;
     printf("\n--name: %s opcode: %02X address: %04X    %d %p\n", 
         cpu->opcodes[opcode].name, 
         opcode, 
