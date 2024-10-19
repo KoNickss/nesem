@@ -1,4 +1,5 @@
 #include "window.h"
+#include "controller.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xos.h>
@@ -116,7 +117,7 @@ void window_init(win_size_t width, win_size_t height){
     win=XCreateSimpleWindow(dis,DefaultRootWindow(dis),0,0,	width, height, 5, BlackPixel(dis,screen), WhitePixel(dis, screen));
     XSetStandardProperties(dis,win, WINDOW_TITLE,WINDOW_TITLE,None,NULL,0,NULL);
     
-    XSelectInput(dis, win, ExposureMask|ButtonPressMask|KeyPressMask|StructureNotifyMask|DestroyNotify);
+    XSelectInput(dis, win, ExposureMask|ButtonPressMask|KeyPressMask|KeyReleaseMask|StructureNotifyMask|DestroyNotify);
     gc=XCreateGC(dis, win, 0,0);
 
     Atom wm_delete = XInternAtom( dis, "WM_DELETE_WINDOW", 1 );
@@ -183,19 +184,68 @@ static void window_redraw(void){
     pthread_mutex_unlock(&mutex);
 }
 
+
+static void window_handle_key(bool key_pressed, byte keycode){
+	bool valid_key_pressed = true;
+	switch(keycode){
+		case 'w':
+			joypad_set_button(JOYPAD_1, BUTTON_UP, key_pressed);
+		break;
+		case 'a':
+			joypad_set_button(JOYPAD_1, BUTTON_LEFT, key_pressed);
+		break;
+		case 's':
+			joypad_set_button(JOYPAD_1, BUTTON_DOWN, key_pressed);
+		break;
+		case 'd':
+			joypad_set_button(JOYPAD_1, BUTTON_RIGHT, key_pressed);
+		break;
+		case ',':
+			joypad_set_button(JOYPAD_1, BUTTON_A, key_pressed);
+		break;
+		case '.':
+			joypad_set_button(JOYPAD_1, BUTTON_B, key_pressed);
+		break;
+		case '\'':
+			joypad_set_button(JOYPAD_1, BUTTON_START, key_pressed);
+		break;
+		case ';':
+			joypad_set_button(JOYPAD_1, BUTTON_SELECT, key_pressed);
+		break;
+		default:
+			valid_key_pressed = false;
+			fprintf(stderr, "\"%c\"\n", keycode);
+		break;
+	}
+}
+
 static void window_handle_event(XEvent* __restrict__ event){
     //Handle keystrokes here
+	char buf[128] = {0};
+	KeySym keysym;
+	int len;
 
-    if (event->type == ConfigureNotify){
-        if(event->xconfigure.width != window_width || event->xconfigure.height != window_height){
-            XResizeWindow(dis, win, window_width, window_height);
-        }
-    }
+	switch(event->type){
+   		case ConfigureNotify:
+	        if(event->xconfigure.width != window_width || event->xconfigure.height != window_height){
+	            XResizeWindow(dis, win, window_width, window_height);
+	        }
+    	break;
+    	case ButtonPress:
+			window_mouse_x = event->xbutton.x;
+			window_mouse_y = event->xbutton.y;
+    	break;
+    	case KeyRelease:
+    		puts("Key released");
+    	case KeyPress:
+    		len = XLookupString(&event->xkey, buf, sizeof(buf) - 1, &keysym, NULL);
+    		window_handle_key(event->type == KeyPress, buf[0]);
+    		(void)len;
+    	break;
+    	default:
 
-    if(event->type == ButtonPress){
-        window_mouse_x = event->xbutton.x;
-        window_mouse_y = event->xbutton.y;
-    }
+    	break;
+	}
 }
 
 static void* window_thread(void* args){
