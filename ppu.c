@@ -326,7 +326,7 @@ static word crt_x = 0;
 
 
 #define NORMAL_PUTROW 0
-#define FORCE_NAMETABLE_DRAW 1 
+#define FORCE_NAMETABLE_DRAW 1
 
 #define ppuPutTile_getHighestBit(val) ((val >> 7) & 0b1)
 static void ppuPutTileRow(){

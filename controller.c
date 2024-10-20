@@ -4,15 +4,16 @@
 
 typedef struct{
 	byte state;
+	byte new_state;
 	byte cur_bit_mask;
 }joypad_state_t;
 
 static joypad_state_t jp[2] = {{0, 1}, {0, 1}};
 
-
+#define JOYPAD_COUNT (sizeof(jp)/sizeof(joypad_state_t))
 
 static inline void check_for_valid_jp(JOYPAD_t joypad_index){
-	if(joypad_index >= (sizeof(jp)/sizeof(joypad_state_t))){
+	if(joypad_index >= JOYPAD_COUNT){
 		fprintf(stderr, "ERR: Tried to read from joypad %d which does not exist!\n", joypad_index);
 		abort();
 	}	
@@ -35,9 +36,23 @@ void joypad_zero_out(JOYPAD_t joypad_index){
 	check_for_valid_jp(joypad_index);
 
 	jp[joypad_index].state = 0;
+	jp[joypad_index].new_state = 0;
 	jp[joypad_index].cur_bit_mask = 1;
 }
 
+void joypad_prepare_read(void){
+	for(int i = 0; i < JOYPAD_COUNT; i++){
+		jp[i].cur_bit_mask = 0b1;
+	}
+}
+
+//Fills the shift register and publishes the button states
+void joypad_publish_state(void){
+	for(int i = 0; i < JOYPAD_COUNT; i++){
+		jp[i].state = jp[i].new_state;
+		jp[i].new_state = 0;
+	}
+}
 
 
 void joypad_set_button(JOYPAD_t joypad_index, BUTTON_t bit_index, bool button_state){
