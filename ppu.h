@@ -101,6 +101,13 @@ typedef struct{
         byte full;
     }mask;
 
+    struct{
+        word patternLo;
+        word patternHi;
+        word attrLo;
+        word attrHi;
+    }bgShift;
+
 
     byte dataByteBuffer;
 
@@ -111,6 +118,8 @@ typedef struct{
     byte xReg;
 
     bool expectingLsb;
+
+    int PALCOL[0x40];
 }PPU;
 
 void initPpu();
