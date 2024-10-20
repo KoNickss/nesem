@@ -63,16 +63,16 @@ busTransaction ZPG(CPU * __restrict__ cpu, word bytes){
 busTransaction ZPGX(CPU * __restrict__ cpu, word bytes){ //not code related, but as a fun fact of the day, addr modes that get offsetted by X or Y were used to create simple arrays, kinda cool
     busTransaction x;
     bytes += cpu->X;
-    x.address = bytes;
-    x.value = busRead8(bytes);
+    x.address = bytes & 0xFF;
+    x.value = busRead8(x.address);
     return x;
 }
 
 busTransaction ZPGY(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
     bytes += cpu->Y;
-    x.address = bytes;
-    x.value = busRead8(bytes);
+    x.address = bytes & 0xFF;
+    x.value = busRead8(x.address);
     return x;
 }
 
@@ -460,7 +460,8 @@ void DEY(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
 
 void INC(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     busTransaction x = addressing(cpu, bytes); //check line 85 for details
-    busWrite8(x.address, x.value + 1);
+    x.value++;
+    busWrite8(x.address, x.value);
     cpu->SR.flags.Zero = !x.value;
     cpu->SR.flags.Negative = x.value >> 7;
 }
@@ -804,7 +805,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x35].mode = &ZPGX;
     cpu->opcodes[0x35].name = "Perform AND logical operation on M byte over A byte";
     cpu->opcodes[0x35].cycles = 4;
-    cpu->opcodes[0x35].bytes = 3;
+    cpu->opcodes[0x35].bytes = 2;
 
     cpu->opcodes[0x39].microcode = &AND;
     cpu->opcodes[0x39].mode = &ABSY;
@@ -892,7 +893,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
 
     cpu->opcodes[0x61].microcode = &ADC;
     cpu->opcodes[0x61].name = "Add with cary Indirect X";
-    cpu->opcodes[0x61].mode = &ABSX;
+    cpu->opcodes[0x61].mode = &INDX;
     cpu->opcodes[0x61].bytes = 2;
     cpu->opcodes[0x61].cycles = 6;
 
@@ -1434,7 +1435,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0xA4].name = "Load value in Y";
 
     cpu->opcodes[0xB4].microcode = &LDY;
-    cpu->opcodes[0xB4].mode = &ZPGY;
+    cpu->opcodes[0xB4].mode = &ZPGX;
     cpu->opcodes[0xB4].bytes = 2;
     cpu->opcodes[0xB4].cycles = 4; 
     cpu->opcodes[0xB4].name = "Load value in Y";
@@ -1446,7 +1447,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0xAC].name = "Load value in Y";
 
     cpu->opcodes[0xBC].microcode = &LDY;
-    cpu->opcodes[0xBC].mode = &ABSY;
+    cpu->opcodes[0xBC].mode = &ABSX;
     cpu->opcodes[0xBC].bytes = 3;
     cpu->opcodes[0xBC].cycles = 4; 
     cpu->opcodes[0xBC].name = "Load value in Y";
@@ -1466,7 +1467,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x46].name = "LSR shift right";
 
     cpu->opcodes[0x56].microcode = &LSR;
-    cpu->opcodes[0x56].mode = &ZPGY;
+    cpu->opcodes[0x56].mode = &ZPGX;
     cpu->opcodes[0x56].bytes = 2;
     cpu->opcodes[0x56].cycles = 4; 
     cpu->opcodes[0x56].name = "LSR shift right";
@@ -1478,7 +1479,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x4E].name = "LSR shift right";
 
     cpu->opcodes[0x5E].microcode = &LSR;
-    cpu->opcodes[0x5E].mode = &ABSY;
+    cpu->opcodes[0x5E].mode = &ABSX;
     cpu->opcodes[0x5E].bytes = 3;
     cpu->opcodes[0x5E].cycles = 4; 
     cpu->opcodes[0x5E].name = "Load value in Y";
@@ -1634,7 +1635,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
 
     cpu->opcodes[0x96].microcode = &STX;
     cpu->opcodes[0x96].name = "Write X reg to bus1";
-    cpu->opcodes[0x96].mode = &ZPGX;
+    cpu->opcodes[0x96].mode = &ZPGY;
     cpu->opcodes[0x96].bytes = 2;
     cpu->opcodes[0x96].cycles = 4;
 
@@ -1891,7 +1892,7 @@ void cpuNmi(CPU * cpu){
 
 void cpuClock(CPU * cpu){
 
-    
+
     handleErrors(cpu);
 
     cpu->pcNeedsInc = true;

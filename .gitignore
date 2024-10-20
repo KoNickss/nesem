@@ -7,3 +7,5 @@ nesem
 *.out
 *dump*
 *.json
+*.nes
+*.bin

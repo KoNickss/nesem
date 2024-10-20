@@ -40,7 +40,11 @@ void joypad_zero_out(JOYPAD_t joypad_index);
 void joypad_set_button(JOYPAD_t joypad_index, BUTTON_t bit_index, bool button_state);
 
 
+//Sets the current bit to read to the first bit
+void joypad_prepare_read(void);
 
+//Fills the shift register and publishes the button states
+void joypad_publish_state(void);
 
 
 

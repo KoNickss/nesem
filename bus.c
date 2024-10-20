@@ -4,9 +4,6 @@
 //For displaying to the screen
 #include "window.h"
 
-//For getting controller input
-#include "controller.h"
-
 bool debug = true;
 
 
@@ -20,9 +17,18 @@ unsigned char bus[BUS_SIZE]; //this is the bus array
 
 #include "cartridge.h"
 
+#include "controller.h"
+
 #define TRANSLATE_PPU_ADDRESS(address) ((address - 0x2000) % 8 + 0x2000)
 
 void busWrite8(word address, word data){
+    /*if(address == 0x4016){
+        if((data & 0b1) == 0b1){
+		    joypad_prepare_read();
+        }else if((data & 0b1) == 0b0){
+            joypad_publish_state();
+        }
+	}*/
     if(!mapper000_Write(address, data, false)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
         
         if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
@@ -30,7 +36,7 @@ void busWrite8(word address, word data){
 
 
         if(0x2000 <= address && address <= 0x3FFF){
-		    address = TRANSLATE_PPU_ADDRESS(address);
+            address = TRANSLATE_PPU_ADDRESS(address);
             ppuRegWrite(address, data & 0xFF);
             return;
         }
@@ -98,14 +104,15 @@ byte debug_read_do_not_use_pls(word address){
 
 static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
     handleErrors(cpu);
-    return;
-    printf("\n--name: %s opcode: %02X address: %04X    %d %p\n", 
-        cpu->opcodes[opcode].name, 
-        opcode, 
-        cpu->PC,  
-        cpu->opcodes[opcode].bytes, 
-        cpu->opcodes[opcode].microcode
-    );
+    #ifdef DEBUG
+        printf("\n--name: %s opcode: %02X address: %04X    %d %p\n", 
+            cpu->opcodes[opcode].name, 
+            opcode, 
+            cpu->PC,  
+            cpu->opcodes[opcode].bytes, 
+            cpu->opcodes[opcode].microcode
+        );
+    #endif
 }
 
 
