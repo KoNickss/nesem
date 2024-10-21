@@ -2,6 +2,7 @@
 #include "common.h"
 
 #include "cartridge.h" //needs acces to the cartridge to load CHR maps, since r/w functions are in-house instead of bus-wide like it is for busRead/Write it needs to be imported here too, quite like there are physical wires connecting the cartridge CHR bank pins to the PPU
+#include <stdio.h>
 #include <pthread.h>
 #include <unistd.h>
 #include "window.h"
@@ -290,6 +291,13 @@ static void sterlize_ppu(){
     }
 }
 
+int getFormatColorFromPaletteRam(byte palette, byte pixel){
+    word addr = 0x3F00 + (palette << 2) + pixel & 0x3F;
+    byte data = ppuRead(addr);
+    return ppu.PALCOL[data];
+}
+
+
 #define PPU_WIDTH 341
 #define PPU_HEIGHT 241
 void initPpu(){
@@ -307,73 +315,73 @@ void initPpu(){
 
     // FORMAT IS AABBGGRR, reverse of RRGGBBAA
 
-    ppu.PALCOL[0x00] = 0x00626262;
-    ppu.PALCOL[0x01] = 0x00902001;
-    ppu.PALCOL[0x02] = 0x00A00B24;
-    ppu.PALCOL[0x03] = 0x00900047;
-    ppu.PALCOL[0x04] = 0x00620060;
-    ppu.PALCOL[0x05] = 0x0024006A;
-    ppu.PALCOL[0x06] = 0x00001160;
-    ppu.PALCOL[0x07] = 0x00002747;
-    ppu.PALCOL[0x08] = 0x00003C24;
-    ppu.PALCOL[0x09] = 0x00004A01;
-    ppu.PALCOL[0x0A] = 0x00004F00;
-    ppu.PALCOL[0x0B] = 0x00244700;
-    ppu.PALCOL[0x0C] = 0x00623600;
-    ppu.PALCOL[0x0D] = 0x00000000;
-    ppu.PALCOL[0x0E] = 0x00000000;
-    ppu.PALCOL[0x0F] = 0x00000000;
+    ppu.PALCOL[0x00] = 0xFF626262;
+    ppu.PALCOL[0x01] = 0xFF902001;
+    ppu.PALCOL[0x02] = 0xFFA00B24;
+    ppu.PALCOL[0x03] = 0xFF900047;
+    ppu.PALCOL[0x04] = 0xFF620060;
+    ppu.PALCOL[0x05] = 0xFF24006A;
+    ppu.PALCOL[0x06] = 0xFF001160;
+    ppu.PALCOL[0x07] = 0xFF002747;
+    ppu.PALCOL[0x08] = 0xFF003C24;
+    ppu.PALCOL[0x09] = 0xFF004A01;
+    ppu.PALCOL[0x0A] = 0xFF004F00;
+    ppu.PALCOL[0x0B] = 0xFF244700;
+    ppu.PALCOL[0x0C] = 0xFF623600;
+    ppu.PALCOL[0x0D] = 0xFF000000;
+    ppu.PALCOL[0x0E] = 0xFF000000;
+    ppu.PALCOL[0x0F] = 0xFF000000;
 
-    ppu.PALCOL[0x10] = 0x00ababab;
-    ppu.PALCOL[0x11] = 0x00e1561f;
-    ppu.PALCOL[0x12] = 0x00ff394d;
-    ppu.PALCOL[0x13] = 0x00ef237e;
-    ppu.PALCOL[0x14] = 0x00b71ba3;
-    ppu.PALCOL[0x15] = 0x006422b4;
-    ppu.PALCOL[0x16] = 0x000e37ac;
-    ppu.PALCOL[0x17] = 0x0000558c;
-    ppu.PALCOL[0x18] = 0x0000725e;
-    ppu.PALCOL[0x19] = 0x0000882d;
-    ppu.PALCOL[0x1A] = 0x00009007;
-    ppu.PALCOL[0x1B] = 0x00478900;
-    ppu.PALCOL[0x1C] = 0x009d7300;
-    ppu.PALCOL[0x1D] = 0x00000000;
-    ppu.PALCOL[0x1E] = 0x00000000;
-    ppu.PALCOL[0x1F] = 0x00000000;
+    ppu.PALCOL[0x10] = 0xFFababab;
+    ppu.PALCOL[0x11] = 0xFFe1561f;
+    ppu.PALCOL[0x12] = 0xFFff394d;
+    ppu.PALCOL[0x13] = 0xFFef237e;
+    ppu.PALCOL[0x14] = 0xFFb71ba3;
+    ppu.PALCOL[0x15] = 0xFF6422b4;
+    ppu.PALCOL[0x16] = 0xFF0e37ac;
+    ppu.PALCOL[0x17] = 0xFF00558c;
+    ppu.PALCOL[0x18] = 0xFF00725e;
+    ppu.PALCOL[0x19] = 0xFF00882d;
+    ppu.PALCOL[0x1A] = 0xFF009007;
+    ppu.PALCOL[0x1B] = 0xFF478900;
+    ppu.PALCOL[0x1C] = 0xFF9d7300;
+    ppu.PALCOL[0x1D] = 0xFF000000;
+    ppu.PALCOL[0x1E] = 0xFF000000;
+    ppu.PALCOL[0x1F] = 0xFF000000;
 
-    ppu.PALCOL[0x20] = 0x00FFFFFF;
-    ppu.PALCOL[0x21] = 0x00FFAC67;
-    ppu.PALCOL[0x22] = 0x00FF8D95;
-    ppu.PALCOL[0x23] = 0x00FF7508;
-    ppu.PALCOL[0x24] = 0x00FF6AF2;
-    ppu.PALCOL[0x25] = 0x00C56FFF;
-    ppu.PALCOL[0x26] = 0x006A83FF;
-    ppu.PALCOL[0x27] = 0x001FA9E6;
-    ppu.PALCOL[0x28] = 0x0000BFB8;
-    ppu.PALCOL[0x29] = 0x0001D885;
-    ppu.PALCOL[0x2A] = 0x0035E35B;
-    ppu.PALCOL[0x2B] = 0x0088DE45;
-    ppu.PALCOL[0x2C] = 0x00E3CA49;
-    ppu.PALCOL[0x2D] = 0x004E4E4E;
-    ppu.PALCOL[0x2E] = 0x00000000;
-    ppu.PALCOL[0x2F] = 0x00000000;
+    ppu.PALCOL[0x20] = 0xFFFFFFFF;
+    ppu.PALCOL[0x21] = 0xFFFFAC67;
+    ppu.PALCOL[0x22] = 0xFFFF8D95;
+    ppu.PALCOL[0x23] = 0xFFFF7508;
+    ppu.PALCOL[0x24] = 0xFFFF6AF2;
+    ppu.PALCOL[0x25] = 0xFFC56FFF;
+    ppu.PALCOL[0x26] = 0xFF6A83FF;
+    ppu.PALCOL[0x27] = 0xFF1FA9E6;
+    ppu.PALCOL[0x28] = 0xFF00BFB8;
+    ppu.PALCOL[0x29] = 0xFF01D885;
+    ppu.PALCOL[0x2A] = 0xFF35E35B;
+    ppu.PALCOL[0x2B] = 0xFF88DE45;
+    ppu.PALCOL[0x2C] = 0xFFE3CA49;
+    ppu.PALCOL[0x2D] = 0xFF4E4E4E;
+    ppu.PALCOL[0x2E] = 0xFF000000;
+    ppu.PALCOL[0x2F] = 0xFF000000;
 
-    ppu.PALCOL[0x30] = 0x00ffffff;
-    ppu.PALCOL[0x31] = 0x00ffe0bf;
-    ppu.PALCOL[0x32] = 0x00ffd3d1;
-    ppu.PALCOL[0x33] = 0x00ffc9e6;
-    ppu.PALCOL[0x34] = 0x00ffc3f7;
-    ppu.PALCOL[0x35] = 0x00eec4ff;
-    ppu.PALCOL[0x36] = 0x00c9cbff;
-    ppu.PALCOL[0x37] = 0x00a9d7f7;
-    ppu.PALCOL[0x38] = 0x0097e3e6;
-    ppu.PALCOL[0x39] = 0x0097eed1;
-    ppu.PALCOL[0x3A] = 0x00a9f3bf;
-    ppu.PALCOL[0x3B] = 0x00c9f2b5;
-    ppu.PALCOL[0x3C] = 0x00eeebb5;
-    ppu.PALCOL[0x3D] = 0x00b8b8b8;
-    ppu.PALCOL[0x3E] = 0x00000000;
-    ppu.PALCOL[0x3F] = 0x00000000;
+    ppu.PALCOL[0x30] = 0xFFffffff;
+    ppu.PALCOL[0x31] = 0xFFffe0bf;
+    ppu.PALCOL[0x32] = 0xFFffd3d1;
+    ppu.PALCOL[0x33] = 0xFFffc9e6;
+    ppu.PALCOL[0x34] = 0xFFffc3f7;
+    ppu.PALCOL[0x35] = 0xFFeec4ff;
+    ppu.PALCOL[0x36] = 0xFFc9cbff;
+    ppu.PALCOL[0x37] = 0xFFa9d7f7;
+    ppu.PALCOL[0x38] = 0xFF97e3e6;
+    ppu.PALCOL[0x39] = 0xFF97eed1;
+    ppu.PALCOL[0x3A] = 0xFFa9f3bf;
+    ppu.PALCOL[0x3B] = 0xFFc9f2b5;
+    ppu.PALCOL[0x3C] = 0xFFeeebb5;
+    ppu.PALCOL[0x3D] = 0xFFb8b8b8;
+    ppu.PALCOL[0x3E] = 0xFF000000;
+    ppu.PALCOL[0x3F] = 0xFF000000;
 
 
 
@@ -412,6 +420,7 @@ static word crt_x = 0;
 
 
 static void ppuPutTileRow(){
+    /*
 #if !NORMAL_PUTROW
 	byte selected_color;
     int tile_offset = 0;
@@ -431,7 +440,6 @@ static void ppuPutTileRow(){
                 }else{
                     img_data[selected_pixel] = TEST_COLORS[selected_color];
                 }
-
                 bgLSBbuf <<= 1;
                 bgMSBbuf <<= 1;
             }
@@ -439,6 +447,7 @@ static void ppuPutTileRow(){
     }
     crt_x += 8;
     #else
+    */
 
     //NORMAL EXECUTION
 
@@ -448,29 +457,46 @@ static void ppuPutTileRow(){
 
         for(int y = 0; y < 8; y++){
 
-            bgLSBbuf = ppuRead(y + (tile_num + tile_offset)*16);
-            bgMSBbuf = ppuRead(y + 8 + (tile_num+tile_offset)*16);
+            //bgLSBbuf = ppuRead(y + (tile_num + tile_offset)*16);
+            //bgMSBbuf = ppuRead(y + 8 + (tile_num+tile_offset)*16);
 
             for(int x = 0; x < 8; x++){
 
-                selected_color = ppuPutTile_getHighestBit(bgLSBbuf);
-                selected_color |= ppuPutTile_getHighestBit(bgMSBbuf) << 1;
+                byte bgPixel = 0;
+                byte bgPal = 0;
 
+                if(ppu.mask.showBackdropDebug){
+                    word bit_m = 0x8000 >> ppu.xReg;
+
+                    byte pixelLo = (ppu.bgShift.patternLo & bit_m) > 0;
+                    byte pixelHi = (ppu.bgShift.patternHi & bit_m) > 0;
+                    bgPixel = (pixelHi << 1) | pixelLo;
+
+                    byte palLo = (ppu.bgShift.attrLo & bit_m) > 0;
+                    byte palHi = (ppu.bgShift.attrHi & bit_m) > 0;
+                    bgPal = (palHi << 1) | palLo;
+                }
+
+
+                int color = getFormatColorFromPaletteRam(bgPal, bgPixel);
                 unsigned long selected_pixel = PPU_WIDTH * scanline + crt_x + x;
                 selected_pixel = PPU_WIDTH * (y+((i/32)*8)) + x + ((i%32) * 8);
 
                 if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
                     fprintf(stderr, "WARN: Out of bounds PPU access\n");
                 }else{
-                    img_data[selected_pixel] = TEST_COLORS[selected_color];
+
+                    img_data[selected_pixel] = color;
                 }
 
-                bgLSBbuf <<= 1;
-                bgMSBbuf <<= 1;
+
+                //bgLSBbuf <<= 1;
+                //bgMSBbuf <<= 1;
             }
         }
     }
     crt_x += 8;
+    /*
     #endif
 #else
 	byte selected_color;
@@ -490,14 +516,9 @@ static void ppuPutTileRow(){
     }
     crt_x += 8;
 
-#endif
+#endif*/
 }
 
-int getFormatColorFromPaletteRam(byte palette, byte pixel){
-    word addr = 0x3F00 + (palette << 2) + pixel & 0x3F;
-    byte data = ppuRead(addr);
-    return ppu.PALCOL[data];
-}
 
 
 
@@ -647,15 +668,15 @@ void ppuClock(void){
         }
     }
 
-    if(scanline == 256){ //done with visible row
+    if(cycle == 256){ //done with visible row
         incrementScrollY_Routine();
     }
 
-    if(scanline == 257){
+    if(cycle == 257){
         resetAddressX_Routine(); //incrementing Y means our X is now incorrect and needs resetting
     }
 
-    if(scanline == -1 && cycle >= 280 && cycle < 305){
+    if(scanline == 0 && cycle >= 280 && cycle < 305){
         resetAddressY_Routine();
     }
 
@@ -672,7 +693,7 @@ void ppuClock(void){
         ppu.status.vblank = true;
         crt_x = 0;
         #if !NORMAL_PUTROW
-            ppuPutTileRow();
+            //ppuPutTileRow();
         #endif
         //stbi_write_png("ppu.png", PPU_WIDTH, PPU_HEIGHT, 4, img_data, PPU_WIDTH * 4);
         window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
@@ -684,7 +705,6 @@ void ppuClock(void){
         ppu.status.vblank = false;
         ppu.control.nmiVerticalBlank = false;
     }
-
 
     byte bgPixel = 0;
     byte bgPal = 0;
@@ -701,11 +721,18 @@ void ppuClock(void){
         bgPal = (palHi << 1) | palLo;
     }
 
+    printf("\n%#12x | %#12x %#12x | %#12x | %d\n", ppu.vReg.field.coarseX, ppu.vReg.field.fineY, ppu.vReg.field.coarseY, ppu.vReg.field.nameTableID, scanline);
+
+
     int color = getFormatColorFromPaletteRam(bgPal, bgPixel);
+    unsigned long selected_pixel = PPU_WIDTH * scanline + cycle - 1;
 
-    unsigned long selected_pixel = PPU_WIDTH * scanline + crt_x + cycle - 1;
-    img_data[selected_pixel] = color;
+    if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
+        //fprintf(stderr, "WARN: Out of bounds PPU access\n");
+    }else{
 
+        img_data[selected_pixel] = color;
+    }
 
 	cycle++;
 }
