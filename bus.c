@@ -30,10 +30,10 @@ void busWrite8(word address, word data){
         }
 	}*/
     if(!mapper000_Write(address, data, false)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
-        
-        if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
-            address %= 0x07FF;
 
+        /*if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+            address %= 0x07FF;
+        */
 
         if(0x2000 <= address && address <= 0x3FFF){
             address = TRANSLATE_PPU_ADDRESS(address);
@@ -51,10 +51,10 @@ word busRead8(word address){
 	}
     word data;
     if((data = mapper000_Read(address, false)) >= 0x100){ //we first ask the mapper to read the data from the address for us in case its on the cartridge, if it returns 0x100 (0xFF + 1 aka impossible to get from reading a byte) that means the data stored at that address is not on the cartridge, but rather on the nes memory, thus we hand the job over to the bus
-        
-        
-        if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
-            address %= 0x07FF;
+
+
+        /*if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+            address %= 0x07FF;*/
 
 
         if(0x2000 <= address && address <= 0x3FFF){
@@ -84,16 +84,16 @@ void busWrite16(word address, word data){
 void dumpBus(){
     FILE *fdump;
     fdump = fopen("dumpfile", "w");
-    
+
     #ifdef DEBUG
         if(fdump == NULL){
             fprintf(stderr, "ERR: Could not access file! Do I have permissions to create a file?\n");
             exit(EXIT_FAILURE);
         }
     #endif
-    
+
     //If the file was successfuly opened then this code will run
-    for(unsigned long long i = 0; i <= 0xFFFF; i++) 
+    for(unsigned long long i = 0; i <= 0xFFFF; i++)
         fprintf(fdump, "%c", busRead8(i));
 }
 
@@ -105,11 +105,11 @@ byte debug_read_do_not_use_pls(word address){
 static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
     handleErrors(cpu);
     #ifdef DEBUG
-        printf("\n--name: %s opcode: %02X address: %04X    %d %p\n", 
-            cpu->opcodes[opcode].name, 
-            opcode, 
-            cpu->PC,  
-            cpu->opcodes[opcode].bytes, 
+        printf("\n--name: %s opcode: %02X address: %04X    %d %p\n",
+            cpu->opcodes[opcode].name,
+            opcode,
+            cpu->PC,
+            cpu->opcodes[opcode].bytes,
             cpu->opcodes[opcode].microcode
         );
     #endif
@@ -140,7 +140,7 @@ int main(int argc, char * argv[]){
     initBanks(argv[1]);
     if(strstr(argv[1], ROM_TEST_NAME)){
         if(strlen(strstr(argv[1], ROM_TEST_NAME)) == strlen(ROM_TEST_NAME)){ //Load test rom at 0xC000
-            cpu->PC = 0xC000; 
+            cpu->PC = 0xC000;
         }else{
             cpu->PC = romStartAddress; //Rom was in a folder called 'ROM_TEST_NAME' rather than loading a file with the same name
         }
@@ -154,8 +154,8 @@ int main(int argc, char * argv[]){
             #if 0
                 debug_print_instruction(cpu, busRead8(cpu->PC));
                 printRegisters(cpu);
-                printCpu(cpu);    
-            #endif  
+                printCpu(cpu);
+            #endif
         #endif
 
         if(ppuGetNmiStatus()){
@@ -182,7 +182,7 @@ int main(int argc, char * argv[]){
             #endif
         #endif
     }
-    
+
     #ifdef DEBUG
         dumpBus();
     #endif
