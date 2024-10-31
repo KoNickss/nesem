@@ -214,7 +214,6 @@ static void window_handle_key(bool key_pressed, byte keycode){
 		break;
 		default:
 			valid_key_pressed = false;
-			fprintf(stderr, "\"%c\"\n", keycode);
 		break;
 	}
 }
@@ -236,7 +235,6 @@ static void window_handle_event(XEvent* __restrict__ event){
 			window_mouse_y = event->xbutton.y;
     	break;
     	case KeyRelease:
-    		puts("Key released");
     	case KeyPress:
     		len = XLookupString(&event->xkey, buf, sizeof(buf) - 1, &keysym, NULL);
     		window_handle_key(event->type == KeyPress, buf[0]);

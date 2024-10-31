@@ -223,7 +223,6 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
         break;
 
         case 2: //ppustatus
-
             returnData = ppu.status.full;
             ppu.expectingLsb = false;
             return returnData;
