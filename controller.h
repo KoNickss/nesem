@@ -33,7 +33,7 @@ typedef enum{
 #endif
 
 
-bool joypad_read_bit(JOYPAD_t joypad_index);
+byte joypad_read_bit(JOYPAD_t joypad_index);
 
 void joypad_zero_out(JOYPAD_t joypad_index);
 

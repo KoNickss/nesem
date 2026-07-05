@@ -9,4 +9,8 @@ nesem
 *.json
 *.nes
 *.bin
+*.s
+mesen
+*.o
+*.inc
 *.zip
