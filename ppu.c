@@ -14,7 +14,7 @@ static void* ppuThread(void* args);
 
 
 #define PPU_BUS_SIZE (0x3FFF)
-static byte ppuBus[PPU_BUS_SIZE];
+static byte ppuBus[2 + PPU_BUS_SIZE];
 
 PPU ppu;
 
@@ -51,7 +51,7 @@ static word resolveAttributeTableAddress(word regData){
     byte trimmedCoarseY = n.field.coarseY >> 2; //trim the lowest 2 bits of coarse Y
 
     word ret = trimmedCoarseX | (trimmedCoarseY << 3); //YYYXXX
-    ret = 0b1111 >> 6 | ret; //1111YYYXXX
+    ret = 0b1111 << 6 | ret; //1111YYYXXX
     ret = n.field.nameTableID << 10 | ret; //NN1111YYYXXX
     ret = 0b10 << 12 | ret; //10NN1111YYYXXX
 
@@ -86,6 +86,8 @@ fixed
 
 static byte ppuRead(word address){
 
+    address &= 0x3FFF;
+
     word cartResponse;
 
     if((cartResponse = mapper000_Read(address, true)) == 0x0100){
@@ -104,6 +106,8 @@ static byte ppuRead(word address){
 }
 
 static void ppuWrite(word address, byte data){
+
+    address &= 0x3FFF;
 
     if(!mapper000_Write(address, data, true)){
 
@@ -226,6 +230,7 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
         case 2: //ppustatus
             returnData = ppu.status.full;
             ppu.expectingLsb = false;
+            ppu.status.vblank = 0;
             return returnData;
 
         break;
@@ -257,9 +262,11 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
 
             ppu.dataByteBuffer = ppuRead(ppu.vReg.data);
 
-            if(ppu.vReg.data >= 0x3F00 && 0x3FFF <= ppu.vReg.data) //except when reading palette info
+            if(ppu.vReg.data >= 0x3F00 && 0x3FFF >= ppu.vReg.data) //except when reading palette info
                 returnData = ppuRead(ppu.vReg.data); //then the query is immediate
 
+            if(ppu.control.vramIncrement) ppu.vReg.data += 32;
+            else ppu.vReg.data++;
 
             return returnData;
 
@@ -291,8 +298,9 @@ static void sterlize_ppu(){
 }
 
 int getFormatColorFromPaletteRam(byte palette, byte pixel){
-    word addr = 0x3F00 + (palette << 2) + pixel & 0x3F;
+    word addr = 0x3F00 + (palette << 2) + (pixel & 0x3F);
     byte data = ppuRead(addr);
+    if(data > 63) return 0;
     return ppu.PALCOL[data];
 }
 
@@ -525,13 +533,21 @@ void loadBackShifters(){
     ppu.bgShift.patternLo = (ppu.bgShift.patternLo & 0xFF00) | (bgLSBbuf); // LOAD incoming data at the bottom of the 16 bit shift register
     ppu.bgShift.patternHi = (ppu.bgShift.patternHi & 0xFF00) | (bgMSBbuf); // --||--
 
-    if(ATbuf & 0b01){
+    byte relevantATbuf = ATbuf >> ( ((ppu.vReg.field.coarseY & 0x02) << 1) | (ppu.vReg.field.coarseX & 0x02) );
+
+    /*
+     * Bytes 0-1 are for top left corner, 2-3 for top right, so on so forth...
+     * This just ensures we're looking in the right place
+     */
+
+
+    if(relevantATbuf & 0b01){
         ppu.bgShift.attrLo = (ppu.bgShift.attrLo & 0xFF00) | 0xFF; //set lower 8 bits to the LSB of the next tileATTR to make sure patterns and pallettes are in sync
     }else{
         ppu.bgShift.attrLo = (ppu.bgShift.attrLo & 0xFF00) | 0x00; //set lower 8 bits to the LSB of the next tileATTR to make sure patterns and pallettes are in sync
     }
 
-    if(ATbuf & 0b10){
+    if(relevantATbuf & 0b10){
         ppu.bgShift.attrHi = (ppu.bgShift.attrHi & 0xFF00) | 0xFF; //set lower 8 bits to the LSB of the next tileATTR to make sure patterns and pallettes are in sync
     }else{
         ppu.bgShift.attrHi = (ppu.bgShift.attrHi & 0xFF00) | 0x00; //set lower 8 bits to the LSB of the next tileATTR to make sure patterns and pallettes are in sync
@@ -558,7 +574,7 @@ void incrementScrollX_Routine(){
 
         if(ppu.vReg.field.coarseX == 31){ // if leaving nametable
             ppu.vReg.field.coarseX = 0; //loop back around
-            ppu.vReg.field.nameTableID = (ppu.vReg.field.nameTableID & 0b10) | ~(ppu.vReg.field.nameTableID & 0b01); // FLIP NAMETABLE X BIT
+            ppu.vReg.field.nameTableID = (ppu.vReg.field.nameTableID & 0b10) | !(ppu.vReg.field.nameTableID & 0b01); // FLIP NAMETABLE X BIT
         }else{
             ppu.vReg.field.coarseX++;
         }
@@ -576,7 +592,7 @@ void incrementScrollY_Routine(){
 
             if(ppu.vReg.field.coarseY == 29){ //we need to swap vertical NT targets
                 ppu.vReg.field.coarseY = 0;
-                ppu.vReg.field.nameTableID = ~(ppu.vReg.field.nameTableID & 0b10) | (ppu.vReg.field.nameTableID & 0b01);
+                ppu.vReg.field.nameTableID = (!(ppu.vReg.field.nameTableID & 0b10) >> 1) | (ppu.vReg.field.nameTableID & 0b01);
             }else if(ppu.vReg.field.coarseY == 31){ // in case the pointer gets in attribute memory
                 ppu.vReg.field.coarseY = 0;
             }else{
@@ -598,6 +614,7 @@ void resetAddressX_Routine(){ // IMPORTANT V SYNC
 void resetAddressY_Routine(){ // IMPORTANT V SYNC
     if(ppu.mask.showBackdropDebug || ppu.mask.showSpritesDebug){ //if rendering
         ppu.vReg.field.fineY = ppu.tReg.field.fineY;
+        ppu.vReg.field.coarseY = ppu.tReg.field.coarseY;
         ppu.vReg.field.nameTableID = (ppu.tReg.field.nameTableID & 0b10) | (ppu.vReg.field.nameTableID & 0b01);
     }
 }
@@ -619,11 +636,11 @@ void ppuClock(void){
     }
 #endif
 
-    if(scanline >= 0 && scanline <= 239){
+    if(scanline >= -1 && scanline <= 239){
         //visible area
         if(scanline == -1 && cycle == 1)
             ppu.status.vblank = 0;
-        if((cycle >= 2 && cycle <= 257) || (cycle >= 321 && cycle <= 337)){
+        if((cycle >= 1 && cycle <= 257) || (cycle >= 321 && cycle <= 337)){
 
             updateShifters();
 
@@ -675,7 +692,7 @@ void ppuClock(void){
         resetAddressX_Routine(); //incrementing Y means our X is now incorrect and needs resetting
     }
 
-    if(scanline == 0 && cycle >= 280 && cycle < 305){
+    if(scanline == -1 && cycle >= 280 && cycle < 305){
         resetAddressY_Routine();
     }
 
@@ -688,7 +705,7 @@ void ppuClock(void){
     }
 
     if(scanline == 241 && cycle == 0){
-        ppu.control.nmiVerticalBlank = true;
+        //ppu.control.nmiVerticalBlank = true; <-- BIG NO NO! ONLY CPU USES THIS!
         ppu.status.vblank = true;
         crt_x = 0;
         #if !NORMAL_PUTROW
@@ -722,6 +739,7 @@ void ppuClock(void){
 
     printf("\n%#12x | %#12x %#12x | %#12x | %d\n", ppu.vReg.field.coarseX, ppu.vReg.field.fineY, ppu.vReg.field.coarseY, ppu.vReg.field.nameTableID, scanline);
 
+    if(bgPixel == 0) bgPal = 0;
 
     int color = getFormatColorFromPaletteRam(bgPal, bgPixel);
     unsigned long selected_pixel = PPU_WIDTH * scanline + cycle - 1;

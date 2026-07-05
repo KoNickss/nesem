@@ -136,7 +136,7 @@ busTransaction IND(CPU * __restrict__ cpu, word bytes){
 
 busTransaction INDX(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
-    
+
     x.address = busRead8((bytes + cpu->X) % 256) + busRead8((bytes + cpu->X + 1) % 256) * 256;
     x.value = busRead8(x.address);
 
@@ -145,7 +145,7 @@ busTransaction INDX(CPU * __restrict__ cpu, word bytes){
 
 busTransaction INDY(CPU * __restrict__ cpu, word bytes){
     busTransaction x;
-    
+
     x.address = busRead8(bytes) + busRead8((bytes + 1) % 256) * 256 + cpu->Y;
     x.value = busRead8(x.address);
 
@@ -219,7 +219,7 @@ void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x
 
     cpu->SR.flags.Break = 1;
     cpu->SR.flags.ignored = 1;
-    
+
     busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data);
     cpu->SP--;
 
@@ -238,7 +238,7 @@ void CLC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 
 void JSR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //JSR - Jump to new absolute address
     busTransaction x = addressing(cpu, bytes);
-    
+
     cpu->pcNeedsInc = false;
     cpu->PC += 2;
     byte pcLsb, pcMsb;
@@ -395,7 +395,7 @@ void CPX(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 
     cpu->SR.flags.Carry = (cpu->X >= x.value);
     cpu->SR.flags.Zero = (cpu->X == x.value);
-    
+
     //TODO: Double check if CPX sets the same flags as CMP
     /*if(cpu->X < x.value){
         cpu->SR.flags.Carry = 0;
@@ -491,7 +491,7 @@ void JMP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 }
 
 void LDA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details    
+    busTransaction x = addressing(cpu, bytes); //check line 85 for details
     cpu->A = x.value;
     cpu->SR.flags.Zero = (cpu->A == 0);
     cpu->SR.flags.Negative = cpu->A >> 7;
@@ -907,7 +907,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x69].mode = &IMM;
     cpu->opcodes[0x69].name = "Add with carry Immeditae";
     cpu->opcodes[0x69].bytes = 2;
-    cpu->opcodes[0x69].cycles = 2;	
+    cpu->opcodes[0x69].cycles = 2;
 
     cpu->opcodes[0x6D].microcode = &ADC;
     cpu->opcodes[0x6D].name = "Add with cary Absolute";
@@ -1233,12 +1233,12 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x88].bytes = 1;
     cpu->opcodes[0x88].cycles = 2;
 
-    //EOR 
+    //EOR
     cpu->opcodes[0x49].microcode = &EOR;
     cpu->opcodes[0x49].mode = &IMM;
     cpu->opcodes[0x49].bytes = 2;
     cpu->opcodes[0x49].cycles = 2;
-    cpu->opcodes[0x49].name = "XOR mem with A"; 
+    cpu->opcodes[0x49].name = "XOR mem with A";
 
     cpu->opcodes[0x45].microcode = &EOR;
     cpu->opcodes[0x45].mode = &ZPG;
@@ -1249,37 +1249,37 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x55].microcode = &EOR;
     cpu->opcodes[0x55].mode = &ZPGX;
     cpu->opcodes[0x55].bytes = 2;
-    cpu->opcodes[0x55].cycles = 4; 
+    cpu->opcodes[0x55].cycles = 4;
     cpu->opcodes[0x55].name = "XOR mem with A";
 
     cpu->opcodes[0x4D].microcode = &EOR;
     cpu->opcodes[0x4D].mode = &ABS;
     cpu->opcodes[0x4D].bytes = 3;
-    cpu->opcodes[0x4D].cycles = 4; 
+    cpu->opcodes[0x4D].cycles = 4;
     cpu->opcodes[0x4D].name = "XOR mem with A";
 
     cpu->opcodes[0x5D].microcode = &EOR;
     cpu->opcodes[0x5D].mode = &ABSX;
     cpu->opcodes[0x5D].bytes = 3;
-    cpu->opcodes[0x5D].cycles = 4; 
+    cpu->opcodes[0x5D].cycles = 4;
     cpu->opcodes[0x5D].name = "XOR mem with A";
 
     cpu->opcodes[0x59].microcode = &EOR;
     cpu->opcodes[0x59].mode = &ABSY;
     cpu->opcodes[0x59].bytes = 3;
-    cpu->opcodes[0x59].cycles = 4; 
+    cpu->opcodes[0x59].cycles = 4;
     cpu->opcodes[0x59].name = "XOR mem with A";
 
     cpu->opcodes[0x41].microcode = &EOR;
     cpu->opcodes[0x41].mode = &INDX;
     cpu->opcodes[0x41].bytes = 2;
-    cpu->opcodes[0x41].cycles = 6; 
+    cpu->opcodes[0x41].cycles = 6;
     cpu->opcodes[0x41].name = "XOR mem with A";
 
     cpu->opcodes[0x51].microcode = &EOR;
     cpu->opcodes[0x51].mode = &INDY;
     cpu->opcodes[0x51].bytes = 2;
-    cpu->opcodes[0x51].cycles = 5; 
+    cpu->opcodes[0x51].cycles = 5;
     cpu->opcodes[0x51].name = "XOR mem with A";
 
     //INC codes
@@ -1330,7 +1330,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x4C].mode = &ABS;
     cpu->opcodes[0x4C].bytes = 3;
     cpu->opcodes[0x4C].cycles = 3;
-    cpu->opcodes[0x4C].name = "JMP to new PC"; 
+    cpu->opcodes[0x4C].name = "JMP to new PC";
 
     cpu->opcodes[0x6C].microcode = &JMP;
     cpu->opcodes[0x6C].mode = &IND;
@@ -1344,7 +1344,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0xA9].mode = &IMM;
     cpu->opcodes[0xA9].bytes = 2;
     cpu->opcodes[0xA9].cycles = 2;
-    cpu->opcodes[0xA9].name = "Load value in A"; 
+    cpu->opcodes[0xA9].name = "Load value in A";
 
     cpu->opcodes[0xA5].microcode = &LDA;
     cpu->opcodes[0xA5].mode = &ZPG;
@@ -1355,37 +1355,37 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0xB5].microcode = &LDA;
     cpu->opcodes[0xB5].mode = &ZPGX;
     cpu->opcodes[0xB5].bytes = 2;
-    cpu->opcodes[0xB5].cycles = 4; 
+    cpu->opcodes[0xB5].cycles = 4;
     cpu->opcodes[0xB5].name = "Load value in A";
 
     cpu->opcodes[0xAD].microcode = &LDA;
     cpu->opcodes[0xAD].mode = &ABS;
     cpu->opcodes[0xAD].bytes = 3;
-    cpu->opcodes[0xAD].cycles = 4; 
+    cpu->opcodes[0xAD].cycles = 4;
     cpu->opcodes[0xAD].name = "Load value in A";
 
     cpu->opcodes[0xBD].microcode = &LDA;
     cpu->opcodes[0xBD].mode = &ABSX;
     cpu->opcodes[0xBD].bytes = 3;
-    cpu->opcodes[0xBD].cycles = 4; 
+    cpu->opcodes[0xBD].cycles = 4;
     cpu->opcodes[0xBD].name = "Load value in A";
 
     cpu->opcodes[0xB9].microcode = &LDA;
     cpu->opcodes[0xB9].mode = &ABSY;
     cpu->opcodes[0xB9].bytes = 3;
-    cpu->opcodes[0xB9].cycles = 4; 
+    cpu->opcodes[0xB9].cycles = 4;
     cpu->opcodes[0xB9].name = "Load value in A";
 
     cpu->opcodes[0xA1].microcode = &LDA;
     cpu->opcodes[0xA1].mode = &INDX;
     cpu->opcodes[0xA1].bytes = 2;
-    cpu->opcodes[0xA1].cycles = 6; 
+    cpu->opcodes[0xA1].cycles = 6;
     cpu->opcodes[0xA1].name = "Load value in A";
 
     cpu->opcodes[0xB1].microcode = &LDA;
     cpu->opcodes[0xB1].mode = &INDY;
     cpu->opcodes[0xB1].bytes = 2;
-    cpu->opcodes[0xB1].cycles = 5; 
+    cpu->opcodes[0xB1].cycles = 5;
     cpu->opcodes[0xB1].name = "Load value in A";
 
     //LDX codes
@@ -1393,31 +1393,31 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0xA2].microcode = &LDX;
     cpu->opcodes[0xA2].mode = &IMM;
     cpu->opcodes[0xA2].bytes = 2;
-    cpu->opcodes[0xA2].cycles = 2; 
+    cpu->opcodes[0xA2].cycles = 2;
     cpu->opcodes[0xA2].name = "Load value in X";
 
     cpu->opcodes[0xA6].microcode = &LDX;
     cpu->opcodes[0xA6].mode = &ZPG;
     cpu->opcodes[0xA6].bytes = 2;
-    cpu->opcodes[0xA6].cycles = 3; 
+    cpu->opcodes[0xA6].cycles = 3;
     cpu->opcodes[0xA6].name = "Load value in X";
 
     cpu->opcodes[0xB6].microcode = &LDX;
     cpu->opcodes[0xB6].mode = &ZPGY;
     cpu->opcodes[0xB6].bytes = 2;
-    cpu->opcodes[0xB6].cycles = 4; 
+    cpu->opcodes[0xB6].cycles = 4;
     cpu->opcodes[0xB6].name = "Load value in X";
 
     cpu->opcodes[0xAE].microcode = &LDX;
     cpu->opcodes[0xAE].mode = &ABS;
     cpu->opcodes[0xAE].bytes = 3;
-    cpu->opcodes[0xAE].cycles = 4; 
+    cpu->opcodes[0xAE].cycles = 4;
     cpu->opcodes[0xAE].name = "Load value in X";
 
     cpu->opcodes[0xBE].microcode = &LDX;
     cpu->opcodes[0xBE].mode = &ABSY;
     cpu->opcodes[0xBE].bytes = 3;
-    cpu->opcodes[0xBE].cycles = 4; 
+    cpu->opcodes[0xBE].cycles = 4;
     cpu->opcodes[0xBE].name = "Load value in X";
 
     //LDY codes
@@ -1425,31 +1425,31 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0xA0].microcode = &LDY;
     cpu->opcodes[0xA0].mode = &IMM;
     cpu->opcodes[0xA0].bytes = 2;
-    cpu->opcodes[0xA0].cycles = 2; 
+    cpu->opcodes[0xA0].cycles = 2;
     cpu->opcodes[0xA0].name = "Load value in Y";
 
     cpu->opcodes[0xA4].microcode = &LDY;
     cpu->opcodes[0xA4].mode = &ZPG;
     cpu->opcodes[0xA4].bytes = 2;
-    cpu->opcodes[0xA4].cycles = 3; 
+    cpu->opcodes[0xA4].cycles = 3;
     cpu->opcodes[0xA4].name = "Load value in Y";
 
     cpu->opcodes[0xB4].microcode = &LDY;
     cpu->opcodes[0xB4].mode = &ZPGX;
     cpu->opcodes[0xB4].bytes = 2;
-    cpu->opcodes[0xB4].cycles = 4; 
+    cpu->opcodes[0xB4].cycles = 4;
     cpu->opcodes[0xB4].name = "Load value in Y";
 
     cpu->opcodes[0xAC].microcode = &LDY;
     cpu->opcodes[0xAC].mode = &ABS;
     cpu->opcodes[0xAC].bytes = 3;
-    cpu->opcodes[0xAC].cycles = 4; 
+    cpu->opcodes[0xAC].cycles = 4;
     cpu->opcodes[0xAC].name = "Load value in Y";
 
     cpu->opcodes[0xBC].microcode = &LDY;
     cpu->opcodes[0xBC].mode = &ABSX;
     cpu->opcodes[0xBC].bytes = 3;
-    cpu->opcodes[0xBC].cycles = 4; 
+    cpu->opcodes[0xBC].cycles = 4;
     cpu->opcodes[0xBC].name = "Load value in Y";
 
     //LSR Codes
@@ -1457,31 +1457,31 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x4A].microcode = &LSR;
     cpu->opcodes[0x4A].mode = &ACC;
     cpu->opcodes[0x4A].bytes = 1;
-    cpu->opcodes[0x4A].cycles = 2; 
+    cpu->opcodes[0x4A].cycles = 2;
     cpu->opcodes[0x4A].name = "LSR shift right";
 
     cpu->opcodes[0x46].microcode = &LSR;
     cpu->opcodes[0x46].mode = &ZPG;
     cpu->opcodes[0x46].bytes = 2;
-    cpu->opcodes[0x46].cycles = 3; 
+    cpu->opcodes[0x46].cycles = 3;
     cpu->opcodes[0x46].name = "LSR shift right";
 
     cpu->opcodes[0x56].microcode = &LSR;
     cpu->opcodes[0x56].mode = &ZPGX;
     cpu->opcodes[0x56].bytes = 2;
-    cpu->opcodes[0x56].cycles = 4; 
+    cpu->opcodes[0x56].cycles = 4;
     cpu->opcodes[0x56].name = "LSR shift right";
 
     cpu->opcodes[0x4E].microcode = &LSR;
     cpu->opcodes[0x4E].mode = &ABS;
     cpu->opcodes[0x4E].bytes = 3;
-    cpu->opcodes[0x4E].cycles = 4; 
+    cpu->opcodes[0x4E].cycles = 4;
     cpu->opcodes[0x4E].name = "LSR shift right";
 
     cpu->opcodes[0x5E].microcode = &LSR;
     cpu->opcodes[0x5E].mode = &ABSX;
     cpu->opcodes[0x5E].bytes = 3;
-    cpu->opcodes[0x5E].cycles = 4; 
+    cpu->opcodes[0x5E].cycles = 4;
     cpu->opcodes[0x5E].name = "Load value in Y";
 
     //NOP
@@ -1496,7 +1496,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x48].microcode = &PHA;
     cpu->opcodes[0x48].mode = &IMP;
     cpu->opcodes[0x48].bytes = 1;
-    cpu->opcodes[0x48].cycles = 3; 
+    cpu->opcodes[0x48].cycles = 3;
     cpu->opcodes[0x48].name = "Push Acc to Stack";
 
     //RTI codes
@@ -1504,7 +1504,7 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x40].microcode = &RTI;
     cpu->opcodes[0x40].mode = &IMP;
     cpu->opcodes[0x40].bytes = 1;
-    cpu->opcodes[0x40].cycles = 6; 
+    cpu->opcodes[0x40].cycles = 6;
     cpu->opcodes[0x40].name = "Pull SR and PC from stack";
 
     //SBC codes
@@ -1730,7 +1730,7 @@ void printRegisters(CPU * __restrict__ cpu){
   printf("I: %i\n", cpu->SR.flags.Interrupt);
   printf("Z: %i\n", cpu->SR.flags.Zero);
   printf("C: %i\n", cpu->SR.flags.Carry);
- 
+
 }
 
 void printCpu(CPU * __restrict__ cpu){
@@ -1743,9 +1743,9 @@ void printCpu(CPU * __restrict__ cpu){
   (byte_ & 0x08 ? '1' : '0'), \
   (byte_ & 0x04 ? '1' : '0'), \
   (byte_ & 0x02 ? '1' : '0'), \
-  (byte_ & 0x01 ? '1' : '0') 
-    
-    
+  (byte_ & 0x01 ? '1' : '0')
+
+
     printf("PC: %#08x\n", cpu->PC);
     printf("SP: %i hex %02X, (%i)\n", cpu->SP, cpu->SP, 0xFFFF - cpu->SP);
     printf("A: %i hex %02X\n", cpu->A, cpu->A);
@@ -1866,7 +1866,7 @@ void initCpu(CPU * __restrict__ cpu){
     cpu->Y = 0;
     cpu->SR.data = 0x6C;
     cpu->SP = 0xFD;
-    
+
     initOpcodeReg(cpu);//import the stuff about each microcode, stuff like bytes per instruction, cycles, adressing mode, and operation in the array, where the value in the array is the byte that triggers that action for the CPU
 }
 
@@ -1890,7 +1890,7 @@ void cpuNmi(CPU * cpu){
     cpu->PC = decodeRomPCVector(ROM_VECTOR_NMI);
 }
 
-void cpuClock(CPU * cpu){
+int cpuClock(CPU * cpu){
 
 
     handleErrors(cpu);
@@ -1924,4 +1924,6 @@ void cpuClock(CPU * cpu){
     if(cpu->pcNeedsInc){
         cpu->PC += sizeOfInstruction;
     } //increase program counter to move on to the next instruction
+
+    return execOP.cycles; // returns number of needed cycles to caller so that
 }

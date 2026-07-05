@@ -32,7 +32,7 @@ void busWrite8(word address, word data){
         }
 	}
     if(!mapper000_Write(address, data, false)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
-        
+
         /*if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
             address %= 0x07FF;*/
 
@@ -52,8 +52,8 @@ word busRead8(word address){
 	}
     word data;
     if((data = mapper000_Read(address, false)) >= 0x100){ //we first ask the mapper to read the data from the address for us in case its on the cartridge, if it returns 0x100 (0xFF + 1 aka impossible to get from reading a byte) that means the data stored at that address is not on the cartridge, but rather on the nes memory, thus we hand the job over to the bus
-        
-        
+
+
         /*if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
             address %= 0x07FF;*/
 
@@ -165,7 +165,7 @@ int main(int argc, char * argv[]){
 	        // Calculate the time elapsed
 	       	clock_t end = clock();
 	       	clock_t elapsed = end - start;
-	            
+
 	        // Calculate remaining time to wait if needed
 	        if (elapsed < min_duration) {
 	            // Sleep for the remaining time, converted to microseconds
@@ -179,11 +179,11 @@ int main(int argc, char * argv[]){
         //
         //
         //RUN THE CPU CLOCK ONE TIME
-        cpuClock(cpu);
+        int cpuCycles = cpuClock(cpu);
         debug_print_instruction(cpu, busRead8(cpu->PC));
-        ppuClock();
-        ppuClock();
-        ppuClock();
+
+        for(int i = 0; i < 3 * cpuCycles; ++i)
+            ppuClock();
         //
         //
         //

@@ -22,7 +22,7 @@ typedef union{
     }flags;
 
     byte data;
-}SR_t; 
+}SR_t;
 
 
 //this is a union, 'flags' (the one with individual bits) and 'data' are synced, to write a byte to the SR write to data, to flip a individual bit write to flags
@@ -67,4 +67,4 @@ void printRegisters(CPU * cpu);
 void initCpu(CPU * cpu); //init cpu, allocate memory for opcode register and set flags to initial state
 void cpuNmi(CPU * cpu); //process non-maskable interrupt, do not use this to trigger nmi, run the activateCpuNmi function in the bus instead
 
-void cpuClock(CPU * cpu); //tick function
+int cpuClock(CPU * cpu); //tick function
