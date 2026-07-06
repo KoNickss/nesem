@@ -55,6 +55,8 @@ typedef struct CPU{
 
     //not part of the ACTUAL cpu, but useful flags I use for emulation
     bool pcNeedsInc; //checks if CPU needs its PC incremented by the number of bytes of the opcode (all opcodes except the sub-routine ones, look for the flag in the code)
+    byte extraCycles; //sometimes we needs extra cycles to perform an instruction, we take not of them here
+    //TODO: add extrea cycles for inter page INDX reads
 }CPU;
 
 struct instruction{

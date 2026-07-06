@@ -236,7 +236,14 @@ void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word, busRead
 
 void BPL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
     busTransaction x = addressing(cpu, bytes, SUPPLY_ADDRESS_ONLY);
-    if(!cpu->SR.flags.Negative) cpu->PC = x.address;
+    if(!cpu->SR.flags.Negative){
+        cpu->extraCycles += 1;
+        if(x.address / 256 != cpu->PC / 256){
+            cpu->extraCycles += 1;
+        }
+
+        cpu->PC = x.address;
+    }
 }
 
 void CLC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
@@ -299,7 +306,14 @@ void ROL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 
 void BMI(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
     busTransaction x = addressing(cpu, bytes, SUPPLY_ADDRESS_ONLY);
-    if(cpu->SR.flags.Negative) cpu->PC = x.address;
+    if(cpu->SR.flags.Negative){
+        cpu->extraCycles += 1;
+        if(x.address / 256 != cpu->PC / 256){
+            cpu->extraCycles += 1;
+        }
+
+        cpu->PC = x.address;
+    }
 }
 
 void ADC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint)){
@@ -318,17 +332,38 @@ void ADC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 
 void BCC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
     busTransaction x = addressing(cpu, bytes, SUPPLY_ADDRESS_ONLY);
-    if(!cpu->SR.flags.Carry) cpu->PC = x.address;
+    if(!cpu->SR.flags.Carry){
+        cpu->extraCycles += 1;
+        if(x.address / 256 != cpu->PC / 256){
+            cpu->extraCycles += 1;
+        }
+
+        cpu->PC = x.address;
+    }
 }
 
 void BCS(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
     busTransaction x = addressing(cpu, bytes, SUPPLY_ADDRESS_ONLY);
-    if(cpu->SR.flags.Carry) cpu->PC = x.address;
+    if(cpu->SR.flags.Carry){
+        cpu->extraCycles += 1;
+        if(x.address / 256 != cpu->PC / 256){
+            cpu->extraCycles += 1;
+        }
+
+        cpu->PC = x.address;
+    }
 }
 
 void BEQ(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
     busTransaction x = addressing(cpu, bytes, SUPPLY_ADDRESS_ONLY);
-    if(cpu->SR.flags.Zero) cpu->PC = x.address;
+    if(cpu->SR.flags.Zero){
+        cpu->extraCycles += 1;
+        if(x.address / 256 != cpu->PC / 256){
+            cpu->extraCycles += 1;
+        }
+
+        cpu->PC = x.address;
+    }
 }
 
 void ROR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
@@ -366,17 +401,38 @@ void EOR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, busRea
 
 void BNE(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
     busTransaction x = addressing(cpu, bytes, SUPPLY_ADDRESS_ONLY);
-    if(!cpu->SR.flags.Zero) cpu->PC = x.address;
+    if(!cpu->SR.flags.Zero){
+        cpu->extraCycles += 1;
+        if(x.address / 256 != cpu->PC / 256){
+            cpu->extraCycles += 1;
+        }
+
+        cpu->PC = x.address;
+    }
 }
 
 void BVC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
     busTransaction x = addressing(cpu, bytes, SUPPLY_ADDRESS_ONLY);
-    if(!cpu->SR.flags.Overflow) cpu->PC = x.address;
+    if(!cpu->SR.flags.Overflow){
+        cpu->extraCycles += 1;
+        if(x.address / 256 != cpu->PC / 256){
+            cpu->extraCycles += 1;
+        }
+
+        cpu->PC = x.address;
+    }
 }
 
 void BVS(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
     busTransaction x = addressing(cpu, bytes, SUPPLY_ADDRESS_ONLY);
-    if(cpu->SR.flags.Overflow) cpu->PC = x.address;
+    if(cpu->SR.flags.Overflow){
+        cpu->extraCycles += 1;
+        if(x.address / 256 != cpu->PC / 256){
+            cpu->extraCycles += 1;
+        }
+
+        cpu->PC = x.address;
+    }
 }
 
 void CLI(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint) ){
@@ -1874,6 +1930,8 @@ void initCpu(CPU * __restrict__ cpu){
     cpu->SR.data = 0x6C;
     cpu->SP = 0xFD;
 
+    cpu->extraCycles = 0;
+
     initOpcodeReg(cpu);//import the stuff about each microcode, stuff like bytes per instruction, cycles, adressing mode, and operation in the array, where the value in the array is the byte that triggers that action for the CPU
 }
 
@@ -1947,5 +2005,9 @@ int cpuClock(CPU * cpu){
         cpu->PC += sizeOfInstruction;
     } //increase program counter to move on to the next instruction
 
-    return execOP.cycles; // returns number of needed cycles to caller so that
+    byte cycles = execOP.cycles;
+    cycles += cpu->extraCycles;
+    cpu->extraCycles = 0;
+
+    return cycles; // returns number of needed cycles to caller so that
 }
