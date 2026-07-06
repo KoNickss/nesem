@@ -15,6 +15,9 @@
 //and branching is just easier
 
 //Quick tip: bytes is the arguments invoked, so for 0xFF 0xA0 0xE2 where 0xFF is the instruction, bytes is 0xA0 0xE2
+//
+// UPDATE: we now have (sadly) a third argument, needsRead, as reads on the NES are full of side effects, that we accidentally triggered for opcodes
+// that did NOT in fact need reads, like STA, which is blind to the previous contents.
 
 
 //REMOVE AFTER DEBUGGING DONE
@@ -35,7 +38,7 @@ static inline word decodeRomPCVector(word addr){
 }
 
 
-busTransaction IMM(CPU * __restrict__ cpu, word bytes){
+busTransaction IMM(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
     x.address = 0; //q: why do we set the address to 0 when its immediate (aka presented as an as-is argument without being tied to any bus address)? because any function that writes to its busTransaction types lacks an IMM mode bcuz you can't write data to nothingness (duh)
     x.value = bytes;
@@ -43,73 +46,73 @@ busTransaction IMM(CPU * __restrict__ cpu, word bytes){
 }
 
 
-busTransaction IMP(CPU * __restrict__ cpu, word bytes){
+busTransaction IMP(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x; //implied opcodes are opcodes that require no arguments, but to keep things uniform we made this too, IMP opcodes dont even use this at all so idk
     return x;
 }
 
-busTransaction ACC(CPU * __restrict__ cpu, word bytes){
+busTransaction ACC(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
     x.address = 0; //as explained above, the accumulator isnt on the bus, so we just branch manually for the opcodes that do this and write directly to the acc, thus the address goes unused
     x.value = cpu->A;
     return x;
 }
 
-busTransaction ZPG(CPU * __restrict__ cpu, word bytes){
+busTransaction ZPG(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
     x.address = bytes;
-    x.value = busRead8(bytes);
+    if(needsRead) x.value = busRead8(bytes);
     return x;
 }
 
-busTransaction ZPGX(CPU * __restrict__ cpu, word bytes){ //not code related, but as a fun fact of the day, addr modes that get offsetted by X or Y were used to create simple arrays, kinda cool
+busTransaction ZPGX(CPU * __restrict__ cpu, word bytes, bool needsRead){ //not code related, but as a fun fact of the day, addr modes that get offsetted by X or Y were used to create simple arrays, kinda cool
     busTransaction x;
     bytes += cpu->X;
     x.address = bytes & 0xFF;
-    x.value = busRead8(x.address);
+    if(needsRead) x.value = busRead8(x.address);
     return x;
 }
 
-busTransaction ZPGY(CPU * __restrict__ cpu, word bytes){
+busTransaction ZPGY(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
     bytes += cpu->Y;
     x.address = bytes & 0xFF;
-    x.value = busRead8(x.address);
+    if(needsRead) x.value = busRead8(x.address);
     return x;
 }
 
-busTransaction REL(CPU * __restrict__ cpu, word bytes){
+busTransaction REL(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
     byte offset = (byte)bytes;
     x.address = cpu->PC + *(char*)&offset; //typecast offset to convert it into a signed number
-    x.value = busRead8(x.address);
+    if(needsRead) x.value = busRead8(x.address);
     return x;
 }
 
-busTransaction ABS(CPU * __restrict__ cpu, word bytes){
+busTransaction ABS(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
     x.address = bytes;
-    x.value = busRead8(bytes);
+    if(needsRead) x.value = busRead8(bytes);
     return x;
 }
 
-busTransaction ABSX(CPU * __restrict__ cpu, word bytes){
+busTransaction ABSX(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
     bytes += cpu->X;
     x.address = bytes;
-    x.value = busRead8(bytes);
+    if(needsRead) x.value = busRead8(bytes);
     return x;
 }
 
-busTransaction ABSY(CPU * __restrict__ cpu, word bytes){
+busTransaction ABSY(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
     bytes += cpu->Y;
     x.address = bytes;
-    x.value = busRead8(bytes);
+    if(needsRead) x.value = busRead8(bytes);
     return x;
 }
 
-busTransaction IND(CPU * __restrict__ cpu, word bytes){
+busTransaction IND(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
     x.address = busRead16(bytes);
 
@@ -132,24 +135,24 @@ busTransaction IND(CPU * __restrict__ cpu, word bytes){
         x.address = busRead8(bytes) | (busRead8(bytes - 0xFF) << 8);
     }
 
-    x.value = busRead8(x.address);
+    if(needsRead) x.value = busRead8(x.address);
     return x;
 }
 
-busTransaction INDX(CPU * __restrict__ cpu, word bytes){
+busTransaction INDX(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
 
     x.address = busRead8((bytes + cpu->X) % 256) + busRead8((bytes + cpu->X + 1) % 256) * 256;
-    x.value = busRead8(x.address);
+    if(needsRead) x.value = busRead8(x.address);
 
     return x;
 }
 
-busTransaction INDY(CPU * __restrict__ cpu, word bytes){
+busTransaction INDY(CPU * __restrict__ cpu, word bytes, bool needsRead){
     busTransaction x;
 
     x.address = busRead8(bytes) + busRead8((bytes + 1) % 256) * 256 + cpu->Y;
-    x.value = busRead8(x.address);
+    if(needsRead) x.value = busRead8(x.address);
 
     return x;
 }
@@ -165,15 +168,15 @@ busTransaction INDY(CPU * __restrict__ cpu, word bytes){
 
 
 
-void ORA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word)){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void ORA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool)){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
     cpu->A |= x.value;
     cpu->SR.flags.Zero = !cpu->A;
     cpu->SR.flags.Negative = cpu->A >> 7;
 }
 
-void ASL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word)){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void ASL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool)){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
 
     cpu->SR.flags.Carry = x.value >> 7;
     x.value <<= 1;
@@ -187,15 +190,15 @@ void ASL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     cpu->SR.flags.Negative = x.value >> 7;
 }
 
-void AND(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void AND(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
 
     cpu->A &= x.value;
     cpu->SR.flags.Zero = !cpu->A;
     cpu->SR.flags.Negative = cpu->A >> 7;
 }
 
-void BRK(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x00 Hardware interupt.
+void BRK(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){ //0x00 Hardware interupt.
 	cpu->pcNeedsInc = false;
 	cpu->PC += 2;
 	cpu->SR.flags.Interrupt = true;
@@ -217,7 +220,7 @@ void BRK(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0
 	cpu->PC = decodeRomPCVector(ROM_VECTOR_IRQ);
 }
 
-void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x08 PHP Push Status register to the stack
+void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){ //0x08 PHP Push Status register to the stack
 
     cpu->SR.flags.Break = 1;
     cpu->SR.flags.ignored = 1;
@@ -229,17 +232,17 @@ void PHP(CPU* cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //0x
 }
 
 
-void BPL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes);
+void BPL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false);
     if(!cpu->SR.flags.Negative) cpu->PC = x.address;
 }
 
-void CLC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void CLC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->SR.flags.Carry = 0;
 }
 
-void JSR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //JSR - Jump to new absolute address
-    busTransaction x = addressing(cpu, bytes);
+void JSR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){ //JSR - Jump to new absolute address
+    busTransaction x = addressing(cpu, bytes, false);
 
     cpu->pcNeedsInc = false;
     cpu->PC += 2;
@@ -255,29 +258,29 @@ void JSR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){ //J
     cpu->PC = x.address;
 }
 
-void BIT(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes);
+void BIT(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true);
     cpu->SR.flags.Zero = !(cpu->A & x.value);
     cpu->SR.flags.Negative = (x.value >> 7) & 1;
     cpu->SR.flags.Overflow = (x.value >> 6) & 1;
 }
 
-void PLP(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void PLP(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->SP++;
     cpu->SR.data = busRead8(cpu->SP + STACK_RAM_OFFSET);
     cpu->SR.flags.Break = 0;
     cpu->SR.flags.ignored = 1;
 }
 
-void PLA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void PLA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->SP++;
     cpu->A = busRead8(cpu->SP + STACK_RAM_OFFSET);
-    cpu->SR.flags.Negative = cpu->A > 7;
+    cpu->SR.flags.Negative = cpu->A >> 7; //typo: used to be ">"
     cpu->SR.flags.Zero = !cpu->A;
 }
 
-void ROL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void ROL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
     bool new_carry = x.value >> 7;
     x.value <<= 1;
     x.value |= cpu->SR.flags.Carry;
@@ -292,13 +295,13 @@ void ROL(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     cpu->SR.flags.Carry = new_carry;
 }
 
-void BMI(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes);
+void BMI(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false);
     if(cpu->SR.flags.Negative) cpu->PC = x.address;
 }
 
-void ADC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word)){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void ADC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool)){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
 
     int tmp = cpu->A + x.value + cpu->SR.flags.Carry;
     bool sign = (tmp >> 7) & 1;
@@ -311,23 +314,23 @@ void ADC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     cpu->A = (byte)tmp;
 }
 
-void BCC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes);
+void BCC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false);
     if(!cpu->SR.flags.Carry) cpu->PC = x.address;
 }
 
-void BCS(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes);
+void BCS(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false);
     if(cpu->SR.flags.Carry) cpu->PC = x.address;
 }
 
-void BEQ(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes);
+void BEQ(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false);
     if(cpu->SR.flags.Zero) cpu->PC = x.address;
 }
 
-void ROR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void ROR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
     bool oldCarry = cpu->SR.flags.Carry;
     cpu->SR.flags.Carry = x.value & 0b00000001;
     x.value >>= 1;
@@ -348,51 +351,51 @@ void ROR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     else busWrite8(x.address, x.value);
 }
 
-void CLD(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void CLD(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->SR.flags.Decimal = 0;
 }
 
-void EOR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void EOR(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
     cpu->A ^= x.value;
     cpu->SR.flags.Zero = !cpu->A;
     cpu->SR.flags.Negative = cpu->A >> 7;
 }
 
-void BNE(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes);
+void BNE(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false);
     if(!cpu->SR.flags.Zero) cpu->PC = x.address;
 }
 
-void BVC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes);
+void BVC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false);
     if(!cpu->SR.flags.Overflow) cpu->PC = x.address;
 }
 
-void BVS(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes);
+void BVS(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false);
     if(cpu->SR.flags.Overflow) cpu->PC = x.address;
 }
 
-void CLI(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void CLI(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->SR.flags.Interrupt = 0;
 }
 
-void CLV(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void CLV(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->SR.flags.Overflow = 0;
 }
 
-void CMP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
-    cpu->SR.flags.Negative = (cpu->A - x.value) >> 7;
+void CMP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
+    cpu->SR.flags.Negative = (byte)(cpu->A - x.value) >> 7;
 
     cpu->SR.flags.Carry = (cpu->A >= x.value);
     cpu->SR.flags.Zero = (cpu->A == x.value);
 }
 
-void CPX(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
-    cpu->SR.flags.Negative = (cpu->X - x.value) >> 7;
+void CPX(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
+    cpu->SR.flags.Negative = (byte)(cpu->X - x.value) >> 7;
 
 
     cpu->SR.flags.Carry = (cpu->X >= x.value);
@@ -415,9 +418,9 @@ void CPX(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     }*/
 }
 
-void CPY(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
-    cpu->SR.flags.Negative = (cpu->Y - x.value) >> 7;
+void CPY(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
+    cpu->SR.flags.Negative = (byte)(cpu->Y - x.value) >> 7;
 
     cpu->SR.flags.Carry = (cpu->Y >= x.value);
     cpu->SR.flags.Zero = (cpu->Y == x.value);
@@ -439,8 +442,8 @@ void CPY(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     }*/
 }
 
-void DEC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void DEC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
     x.value--;
     //TODO: Does this need an ACC option?
     busWrite8(x.address, x.value);
@@ -448,40 +451,40 @@ void DEC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     cpu->SR.flags.Zero = (x.value == 0);
 }
 
-void DEX(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void DEX(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->X -= 1;
     cpu->SR.flags.Negative = (cpu->X >> 7);
     cpu->SR.flags.Zero = (cpu->X == 0);
 }
 
-void DEY(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void DEY(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->Y -= 1;
     cpu->SR.flags.Negative = (cpu->Y >> 7);
     cpu->SR.flags.Zero = (cpu->Y == 0);
 }
 
-void INC(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void INC(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
     x.value++;
     busWrite8(x.address, x.value);
     cpu->SR.flags.Zero = !x.value;
     cpu->SR.flags.Negative = x.value >> 7;
 }
 
-void INX(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void INX(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->X += 1;
     cpu->SR.flags.Negative = (cpu->X >> 7);
     cpu->SR.flags.Zero = (cpu->X == 0);
 }
 
-void INY(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void INY(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->Y += 1;
     cpu->SR.flags.Negative = (cpu->Y >> 7);
     cpu->SR.flags.Zero = (cpu->Y == 0);
 }
 
-void JMP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void JMP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false); //check line 85 for details
     cpu->PC = x.address;
     cpu->pcNeedsInc = false;
 
@@ -492,29 +495,29 @@ void JMP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     //for no reason, look at the IND function for further detailing
 }
 
-void LDA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void LDA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
     cpu->A = x.value;
     cpu->SR.flags.Zero = (cpu->A == 0);
     cpu->SR.flags.Negative = cpu->A >> 7;
 }
 
-void LDX(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void LDX(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
     cpu->X = x.value;
     cpu->SR.flags.Zero = !x.value;
     cpu->SR.flags.Negative = x.value >> 7;
 }
 
-void LDY(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void LDY(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
     cpu->Y = x.value;
     cpu->SR.flags.Zero = !x.value;
     cpu->SR.flags.Negative = x.value >> 7;
 }
 
-void LSR(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void LSR(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
     byte new_val = (x.value >> 1);
 
     if(addressing == &ACC){
@@ -528,16 +531,16 @@ void LSR(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     cpu->SR.flags.Zero = (new_val == 0);
 }
 
-void NOP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void NOP(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     //nothing to see here
 }
 
-void PHA(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void PHA(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->A);
     cpu->SP--;
 }
 
-void RTI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void RTI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->pcNeedsInc = false;
     cpu->SP++;
     cpu->SR.data = busRead8(cpu->SP + STACK_RAM_OFFSET);
@@ -552,7 +555,7 @@ void RTI(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->PC = newPC;
 }
 
-void RTS(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void RTS(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->SP++;
     word newPC = busRead8(cpu->SP + STACK_RAM_OFFSET);
 
@@ -562,8 +565,8 @@ void RTS(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
     cpu->PC = newPC;
 }
 
-void SBC(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word)){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void SBC(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool)){
+    busTransaction x = addressing(cpu, bytes, true); //check line 85 for details
 
     x.value ^= 0x00FF;
 
@@ -580,62 +583,62 @@ void SBC(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word)){
     cpu->A = (byte)tmp;
 }
 
-void SEC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word)){
+void SEC(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool)){
     cpu->SR.flags.Carry = 1;
 }
 
-void SEI(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word)){
+void SEI(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool)){
     cpu->SR.flags.Interrupt = 1;
 }
 
-void SED(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void SED(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->SR.flags.Decimal = 1;
 }
 
-void STA(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void STA(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false); //check line 85 for details
     busWrite8(x.address, cpu->A);
 }
 
-void STX(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void STX(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false); //check line 85 for details
     busWrite8(x.address, cpu->X);
 }
 
-void STY(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
-    busTransaction x = addressing(cpu, bytes); //check line 85 for details
+void STY(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
+    busTransaction x = addressing(cpu, bytes, false); //check line 85 for details
     busWrite8(x.address, cpu->Y);
 }
 
-void TAX(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void TAX(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->X = cpu->A;
     cpu->SR.flags.Zero = !cpu->X;
     cpu->SR.flags.Negative = cpu->X >> 7;
 }
 
-void TAY(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void TAY(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->Y = cpu->A;
     cpu->SR.flags.Zero = !cpu->Y;
     cpu->SR.flags.Negative = cpu->Y >> 7;
 }
 
-void TSX(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void TSX(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->X = cpu->SP;
     cpu->SR.flags.Zero = !cpu->X;
     cpu->SR.flags.Negative = cpu->X >> 7;
 }
 
-void TXA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void TXA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->A = cpu->X;
     cpu->SR.flags.Zero = !cpu->A;
     cpu->SR.flags.Negative = cpu->A >> 7;
 }
 
-void TXS(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void TXS(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->SP = cpu->X;
 }
 
-void TYA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word) ){
+void TYA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, bool) ){
     cpu->A = cpu->Y;
     cpu->SR.flags.Zero = !cpu->A;
     cpu->SR.flags.Negative = cpu->A >> 7;

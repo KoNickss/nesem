@@ -54,8 +54,8 @@ typedef struct CPU{
 }CPU;
 
 struct instruction{
-    void (*microcode)(struct CPU *, word bytes, busTransaction (*addressing)(CPU *, word)); //generic definition for opcode funcs such as BRK, ORA, etc
-    busTransaction (*mode)(struct CPU * cpu, word bytes); //check line 85
+    void (*microcode)(struct CPU *, word bytes, busTransaction (*addressing)(CPU *, word, bool)); //generic definition for opcode funcs such as BRK, ORA, etc
+    busTransaction (*mode)(struct CPU * cpu, word bytes, bool needsRead); //check line 85
     char * name;
     char bytes;
     char cycles;

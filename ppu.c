@@ -91,6 +91,9 @@ static byte ppuRead(word address){
         if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
             address = (address - 0x3F20) % 0x20 + 0x3F00;
 
+        if(address == 0x3F04 || address == 0x3F08 || address == 0x3F0C)
+            address = 0x3F00;
+
         return ppuBus[address];
     }
 
@@ -108,7 +111,7 @@ static void ppuWrite(word address, byte data){
             address -= 0x1000;
 
         if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
-            address = (address - 0x3F20) % 0x20 + 0x3F00;
+            address = ((address - 0x3F20) & 0b11111) + 0x3F00;
 
         ppuBus[address] = data;
     }
@@ -118,6 +121,7 @@ static void ppuWrite(word address, byte data){
 
 void ppuRegWrite(word address, byte data){
     address -= 0x2000;
+    address &= 0b111;
     switch(address){
         case 0: //ppuctrl
 
@@ -204,6 +208,8 @@ void ppuRegWrite(word address, byte data){
 byte ppuRegRead(word address){ //send the registers to the bus so the components can read them
 
     address -= 0x2000;
+
+    address &= 0b111;
 
     byte returnData;
 
@@ -299,7 +305,10 @@ int getFormatColorFromPaletteRam(byte palette, byte pixel){
 
 
 #define PPU_WIDTH 341
-#define PPU_HEIGHT 241
+#define PPU_HEIGHT 262
+
+#define SCREEN_WIDTH 256
+#define SCREEN_HEIGHT 240
 void initPpu(){
     ppu.dataByteBuffer = 0;
     ppu.expectingLsb = 0;
@@ -414,7 +423,7 @@ static word crt_x = 0;
 
 
 #define NORMAL_PUTROW 1
-#define FORCE_NAMETABLE_DRAW 1
+#define FORCE_NAMETABLE_DRAW 0
 
 #define ppuPutTile_getHighestBit(val) ((val >> 7) & 0b1)
 
@@ -446,7 +455,6 @@ static void ppuPutTileRow(){
     }
     crt_x += 8;
     #else
-
     //NORMAL EXECUTION
 
     for(int i = 0; i < 0x300; i++){
@@ -496,6 +504,7 @@ static void ppuPutTileRow(){
             }
         }
     }
+    printf("HIHI");
     crt_x += 8;
     #endif
 #else
@@ -505,13 +514,15 @@ static void ppuPutTileRow(){
         selected_color |= ppuPutTile_getHighestBit(bgMSBbuf) << 1;
 
 
-        unsigned long selected_pixel = PPU_WIDTH * scanline + x + crt_x;
+
+        unsigned long selected_pixel = SCREEN_WIDTH * scanline + x + crt_x;
         if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
             if( scanline >= 0){
                 fprintf(stderr, "WARN: Out of bounds PPU access\n");
             }
         }else{
-            img_data[selected_pixel] = TEST_COLORS[selected_color];
+            //byte color = getFormatColorFromPaletteRam();
+            img_data[selected_pixel] = ppu.PALCOL[selected_color]; //doesnt display the correct color, i was just playing around
         }
 
         bgLSBbuf <<= 1;
@@ -588,7 +599,7 @@ void incrementScrollY_Routine(){
 
             if(ppu.vReg.field.coarseY == 29){ //we need to swap vertical NT targets
                 ppu.vReg.field.coarseY = 0;
-                ppu.vReg.field.nameTableID = (!(ppu.vReg.field.nameTableID & 0b10) >> 1) | (ppu.vReg.field.nameTableID & 0b01);
+                ppu.vReg.field.nameTableID ^= 0b10;
             }else if(ppu.vReg.field.coarseY == 31){ // in case the pointer gets in attribute memory
                 ppu.vReg.field.coarseY = 0;
             }else{
@@ -635,7 +646,7 @@ void ppuClock(CPU* cpu){
         ppu.status.vblank = 0;
     if(scanline >= -1 && scanline <= 239){
         //visible area
-        
+
         if((cycle >= 1 && cycle <= 257) || (cycle >= 321 && cycle <= 337)){
 
             updateShifters();
@@ -665,7 +676,7 @@ void ppuClock(CPU* cpu){
                 case 6:
                     bgMSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 8);
                     #if NORMAL_PUTROW
-                        ppuPutTileRow();
+                        //ppuPutTileRow();
                     #endif
                 break;
 
@@ -695,7 +706,7 @@ void ppuClock(CPU* cpu){
 
     //SCANLINE over and reset counters
     if(cycle >= 341){
-        cycle -= 341; //FIXME: See if this causes issues if say cycle=342
+        cycle = 0;
         scanline++;
         crt_x = 0;
     }
@@ -707,7 +718,7 @@ void ppuClock(CPU* cpu){
         ppu.status.vblank = true;
         crt_x = 0;
         #if !NORMAL_PUTROW
-            ppuPutTileRow();
+            //ppuPutTileRow();
         #endif
         //stbi_write_png("ppu.png", PPU_WIDTH, PPU_HEIGHT, 4, img_data, PPU_WIDTH * 4);
         window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
@@ -738,19 +749,15 @@ void ppuClock(CPU* cpu){
 
     if(bgPixel == 0) bgPal = 0;
 
-    #if 0
-    if(scanline >= 0){
-        int color = getFormatColorFromPaletteRam(bgPal, bgPixel);
+
+    if(scanline >= 0 && scanline < PPU_HEIGHT && cycle >= 0 && cycle < PPU_WIDTH){
+
         unsigned long selected_pixel = PPU_WIDTH * scanline + cycle;
 
-        if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
-            fprintf(stderr, "WARN: Out of bounds PPU access img_addr=%li, max=%lu\n", selected_pixel,PPU_WIDTH*PPU_HEIGHT);
-        }else{
-
-            img_data[selected_pixel] = color;
-        }
+        int color = getFormatColorFromPaletteRam(bgPal, bgPixel);
+        img_data[selected_pixel] = color;
     }
-    #endif
+
 
 	cycle++;
 }
