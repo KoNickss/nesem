@@ -130,8 +130,6 @@ int main(int argc, char * argv[]){
 
     initCpu(cpu); //put new CPU in starting mode and dock it to the bus
 
-    initPpu(); //Create ppu thread and initalize memory
-
     if(argc <= 1){ //Check to see if a rom was given
         fprintf(stderr, "ERR: No Rom file Specified in Arguments\n");
         exit(EXIT_FAILURE);
@@ -148,6 +146,8 @@ int main(int argc, char * argv[]){
     }else{
         cpu->PC = romStartAddress; //Rom was not a test rom. Load normally
     }
+
+    initPpu(); //Create ppu thread and initalize memory
 
     while(true){
 

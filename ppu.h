@@ -119,7 +119,8 @@ typedef struct{
 
     byte xReg;
 
-    bool expectingLsb;
+    bool expectingLsb; // 'w' latch
+    bool nmiNow; // NMI NOW!!
 
     int PALCOL[0x40];
 }PPU;

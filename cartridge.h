@@ -70,9 +70,8 @@ typedef struct{
     byte padding[5];
 }HEADER;
 
-
 void initBanks(char * fn);
 
 word mapper000_Read(word address, bool ppu);
 bool mapper000_Write(word address, byte data, bool ppu);
-
+bool isVerticalMirroring();

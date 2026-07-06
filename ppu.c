@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <unistd.h>
+#include "cpu.h"
 #include "window.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -21,6 +22,8 @@ PPU ppu;
 static inline word resolveNameTableAddress(word regData){
     return (regData & 0b0000111111111111) | (1 << (14 - 1));
 }
+
+bool verticalMirroring;
 
 
 
@@ -85,14 +88,26 @@ static byte ppuRead(word address){
 
     if((cartResponse = mapper000_Read(address, true)) == 0x0100){
 
+        if(address >= 0x2000 && address <= 0x2FFF){
+            if(verticalMirroring){
+                address &= 0x27FF;
+            } else {
+                address = 0x2000 + ((address >> 1) & 0x0400) + (address & 0x03FF);
+            }
+        }
+
+        if (address == 0x3F10 || address == 0x3F14 || address == 0x3F18 || address == 0x3F1C) {
+            address -= 0x0010;
+        }
+
+        if(address == 0x3F04 || address == 0x3F08 || address == 0x3F0C)
+            address = 0x3F00;
+
         if(address >= 0x3000 && address <= 0x3EFF) //mirrored region of nametables
             address -= 0x1000;
 
         if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
             address = (address - 0x3F20) % 0x20 + 0x3F00;
-
-        if(address == 0x3F04 || address == 0x3F08 || address == 0x3F0C)
-            address = 0x3F00;
 
         return ppuBus[address];
     }
@@ -106,6 +121,21 @@ static void ppuWrite(word address, byte data){
     address &= 0x3FFF;
 
     if(!mapper000_Write(address, data, true)){
+
+        if(address >= 0x2000 && address <= 0x2FFF){
+            if(verticalMirroring){
+                address &= 0x27FF;
+            } else {
+                address = 0x2000 + ((address >> 1) & 0x0400) + (address & 0x03FF);
+            }
+        }
+
+        if (address == 0x3F10 || address == 0x3F14 || address == 0x3F18 || address == 0x3F1C) {
+            address -= 0x0010;
+        }
+
+        if(address == 0x3F04 || address == 0x3F08 || address == 0x3F0C)
+            address = 0x3F00;
 
         if(address >= 0x3000 && address <= 0x3EFF) //mirrored region of nametables
             address -= 0x1000;
@@ -125,8 +155,13 @@ void ppuRegWrite(word address, byte data){
     switch(address){
         case 0: //ppuctrl
 
+            bool prevNmi = ppu.control.nmiVerticalBlank;
             ppu.control.full = data;
             ppu.tReg.field.nameTableID = ppu.control.nameTableID;
+
+            if (!prevNmi && ppu.control.nmiVerticalBlank && ppu.status.vblank) {
+                ppu.nmiNow = 1;
+            }
 
         break;
 
@@ -230,6 +265,9 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
             returnData = ppu.status.full;
             ppu.expectingLsb = false;
             ppu.status.vblank = 0;
+
+            ppu.expectingLsb = 0; // <- 'w' latch cant be read, so gamedevs read ppustatus to ensure its state is 0
+
             return returnData;
 
         break;
@@ -321,6 +359,10 @@ void initPpu(){
     ppu.bgShift.attrLo = 0;
     ppu.bgShift.patternHi = 0;
     ppu.bgShift.patternLo = 0;
+
+    ppu.nmiNow = 0;
+
+    verticalMirroring = isVerticalMirroring();
 
     // FORMAT IS AABBGGRR, reverse of RRGGBBAA
 
@@ -612,7 +654,7 @@ void incrementScrollY_Routine(){
 }
 
 void resetAddressX_Routine(){ // IMPORTANT V SYNC
-    if(ppu.mask.showBackdropDebug || ppu.mask.showBackdropDebug){ //if rendering
+    if(ppu.mask.showBackdropDebug || ppu.mask.showSpritesDebug){ //if rendering
         ppu.vReg.field.nameTableID = (ppu.vReg.field.nameTableID & 0b10) | (ppu.tReg.field.nameTableID & 0b01); //GET NT_X from tREG
         ppu.vReg.field.coarseX = ppu.tReg.field.coarseX;
     }
@@ -629,19 +671,25 @@ void resetAddressY_Routine(){ // IMPORTANT V SYNC
 
 void ppuClock(CPU* cpu){
     //one tick of the PPU clock
-#if 0
-    if(cycle % 8){
-        if(cycle > 0){
-            if(cycle - 1 % 2){
-                //High Byte
+    #if 0
+        if(cycle % 8){
+            if(cycle > 0){
+                if(cycle - 1 % 2){
+                    //High Byte
+                }else{
+                    //Low Byte
+                }
             }else{
-                //Low Byte
+                //H-BLANK
             }
-        }else{
-            //H-BLANK
         }
+    #endif
+
+    if(ppu.nmiNow){
+        ppu.nmiNow = 0;
+        cpuNmi(cpu);
     }
-#endif
+
     if(scanline == -1 && cycle == 1)
         ppu.status.vblank = 0;
     if(scanline >= -1 && scanline <= 239){
@@ -656,13 +704,14 @@ void ppuClock(CPU* cpu){
                 case 0:
                     //READ NameTable BYTE
                     loadBackShifters();
-                    NTbuf = ppuBus[resolveNameTableAddress(ppu.vReg.data)];
+                    // NTbuf = ppuBus[resolveNameTableAddress(ppu.vReg.data)]; WTF??
+                    NTbuf = ppuRead(resolveNameTableAddress(ppu.vReg.data));
                 break;
 
 
                 case 2:
                     //READ AttributeTable BYTE
-                    ATbuf = ppuBus[resolveAttributeTableAddress(ppu.vReg.data)];
+                    ATbuf = ppuRead(resolveAttributeTableAddress(ppu.vReg.data));
                 break;
 
 

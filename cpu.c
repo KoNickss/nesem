@@ -1951,6 +1951,7 @@ void cpuNmi(CPU * cpu){
     busWrite8(cpu->SP + STACK_RAM_OFFSET, cpu->SR.data); //push status register to stack
     cpu->SP--;
 
+
     //Read new address from NMI vector
     cpu->PC = decodeRomPCVector(ROM_VECTOR_NMI);
 
@@ -1968,6 +1969,7 @@ void cpuNmi(CPU * cpu){
 	    usleep((min_duration - elapsed) * 1000000 / CLOCKS_PER_SEC);
 	}
     start = clock();
+
 }
 
 int cpuClock(CPU * cpu){

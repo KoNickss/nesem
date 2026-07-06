@@ -9,6 +9,12 @@ word not_handling_this = 0x100; //0xFF + 1
 
 word romStartAddress = 0x0;
 
+bool _verticalMirroring;
+
+bool isVerticalMirroring(){
+    return _verticalMirroring;
+}
+
 void loadRomfileHeader(FILE * romfile){
     byte verificationToken[3] = "NES";
     for(byte i = 0; i < 3; i++)
@@ -37,12 +43,14 @@ void initBanks(char name[]){
         fprintf(stderr, "ERR: file \"%s\" could not be opened for reading!\n", name);
         exit(EXIT_FAILURE);
     }
-    
+
     loadRomfileHeader(romfile);
-    
+
+    _verticalMirroring = Header.flags.flag6.mirroringMode;
+
     if(Header.flags.flag6.trainer) //if trainer data
         fseek(romfile, 512, SEEK_CUR);
-    
+
 
     fread(PRGROM, 1, GET_PRG_BANK_SIZE(Header.PRG_BANKS), romfile);
     fread(CHRROM, 1, GET_PRG_BANK_SIZE(Header.CHR_BANKS), romfile);
@@ -75,9 +83,9 @@ word mapper000_Read(word address, bool ppu){
     }else{ //if PPU
         if(Header.CHR_BANKS == 0){
         	return not_handling_this; //if no CHR banks, nothing to mirror
-        }else if (address <= 0x2000){ 
+        }else if (address <= 0x2000){
         	return CHRROM[address];
-		}else{ 
+		}else{
 			return not_handling_this;
 		}
     }
