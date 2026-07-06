@@ -36,6 +36,10 @@ typedef struct{
     byte value;
 } busTransaction; //this is the type we use for our addressing types, they resolve to this type which contains a value and address
 
+typedef enum{
+    SUPPLY_ADDRESS_ONLY,
+    SUPPLY_ADDRESS_AND_DATA // VERY IMPORTANT! we DONT want to read the data in the addressing functions for opcodes like STA when the real NES wouldnt because this messes up stateful reads (like PPUDATA)
+}busReadConstraint;
 
 struct instruction;
 
@@ -54,8 +58,8 @@ typedef struct CPU{
 }CPU;
 
 struct instruction{
-    void (*microcode)(struct CPU *, word bytes, busTransaction (*addressing)(CPU *, word, bool)); //generic definition for opcode funcs such as BRK, ORA, etc
-    busTransaction (*mode)(struct CPU * cpu, word bytes, bool needsRead); //check line 85
+    void (*microcode)(struct CPU *, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint)); //generic definition for opcode funcs such as BRK, ORA, etc
+    busTransaction (*mode)(struct CPU * cpu, word bytes, busReadConstraint needsRead); //check line 85
     char * name;
     char bytes;
     char cycles;
