@@ -23,13 +23,6 @@ static inline word resolveNameTableAddress(word regData){
 }
 
 
-bool ppuGetNmiStatus(void){
-	return ppu.control.nmiVerticalBlank;
-}
-
-void ppuClearNmiStatus(void){
-    ppu.control.nmiVerticalBlank = false;
-}
 
 /*
 10NNYYYYYXXXXX
@@ -427,7 +420,6 @@ static word crt_x = 0;
 
 
 static void ppuPutTileRow(){
-    /*
 #if !NORMAL_PUTROW
 	byte selected_color;
     int tile_offset = 0;
@@ -454,7 +446,6 @@ static void ppuPutTileRow(){
     }
     crt_x += 8;
     #else
-    */
 
     //NORMAL EXECUTION
 
@@ -464,10 +455,13 @@ static void ppuPutTileRow(){
 
         for(int y = 0; y < 8; y++){
 
-            //bgLSBbuf = ppuRead(y + (tile_num + tile_offset)*16);
-            //bgMSBbuf = ppuRead(y + 8 + (tile_num+tile_offset)*16);
+            unsigned char bgLSBbuf1 = ppuRead(y + (tile_num + tile_offset)*16);
+            unsigned char bgMSBbuf1 = ppuRead(y + 8 + (tile_num+tile_offset)*16);
 
             for(int x = 0; x < 8; x++){
+
+                selected_color = ppuPutTile_getHighestBit(bgLSBbuf1);
+                selected_color |= ppuPutTile_getHighestBit(bgMSBbuf1) << 1;
 
                 byte bgPixel = 0;
                 byte bgPal = 0;
@@ -493,17 +487,16 @@ static void ppuPutTileRow(){
                     fprintf(stderr, "WARN: Out of bounds PPU access\n");
                 }else{
 
-                    img_data[selected_pixel] = color;
+                    img_data[selected_pixel] = TEST_COLORS[selected_color];
                 }
 
 
-                //bgLSBbuf <<= 1;
-                //bgMSBbuf <<= 1;
+                bgLSBbuf1 <<= 1;
+                bgMSBbuf1 <<= 1;
             }
         }
     }
     crt_x += 8;
-    /*
     #endif
 #else
 	byte selected_color;
@@ -511,9 +504,12 @@ static void ppuPutTileRow(){
         selected_color = ppuPutTile_getHighestBit(bgLSBbuf);
         selected_color |= ppuPutTile_getHighestBit(bgMSBbuf) << 1;
 
-        unsigned long selected_pixel = PPU_WIDTH * scanline + crt_x + x;
+
+        unsigned long selected_pixel = PPU_WIDTH * scanline + x + crt_x;
         if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
-            fprintf(stderr, "WARN: Out of bounds PPU access\n");
+            if( scanline >= 0){
+                fprintf(stderr, "WARN: Out of bounds PPU access\n");
+            }
         }else{
             img_data[selected_pixel] = TEST_COLORS[selected_color];
         }
@@ -523,7 +519,7 @@ static void ppuPutTileRow(){
     }
     crt_x += 8;
 
-#endif*/
+#endif
 }
 
 
@@ -620,7 +616,7 @@ void resetAddressY_Routine(){ // IMPORTANT V SYNC
 }
 
 
-void ppuClock(void){
+void ppuClock(CPU* cpu){
     //one tick of the PPU clock
 #if 0
     if(cycle % 8){
@@ -635,11 +631,11 @@ void ppuClock(void){
         }
     }
 #endif
-
+    if(scanline == -1 && cycle == 1)
+        ppu.status.vblank = 0;
     if(scanline >= -1 && scanline <= 239){
         //visible area
-        if(scanline == -1 && cycle == 1)
-            ppu.status.vblank = 0;
+        
         if((cycle >= 1 && cycle <= 257) || (cycle >= 321 && cycle <= 337)){
 
             updateShifters();
@@ -669,7 +665,7 @@ void ppuClock(void){
                 case 6:
                     bgMSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 8);
                     #if NORMAL_PUTROW
-                        //ppuPutTileRow();
+                        ppuPutTileRow();
                     #endif
                 break;
 
@@ -699,27 +695,28 @@ void ppuClock(void){
 
     //SCANLINE over and reset counters
     if(cycle >= 341){
-        cycle -= 341;
+        cycle -= 341; //FIXME: See if this causes issues if say cycle=342
         scanline++;
         crt_x = 0;
     }
 
     if(scanline == 241 && cycle == 0){
-        //ppu.control.nmiVerticalBlank = true; <-- BIG NO NO! ONLY CPU USES THIS!
+        if(ppu.control.nmiVerticalBlank){
+            cpuNmi(cpu);
+        }
         ppu.status.vblank = true;
         crt_x = 0;
         #if !NORMAL_PUTROW
-            //ppuPutTileRow();
+            ppuPutTileRow();
         #endif
         //stbi_write_png("ppu.png", PPU_WIDTH, PPU_HEIGHT, 4, img_data, PPU_WIDTH * 4);
         window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
     }
 
-    if(scanline >= 262){
-        scanline = 0;
+    if(scanline >= 261){
+        scanline = -1;
         crt_x = 0;
         ppu.status.vblank = false;
-        ppu.control.nmiVerticalBlank = false;
     }
 
     byte bgPixel = 0;
@@ -737,29 +734,37 @@ void ppuClock(void){
         bgPal = (palHi << 1) | palLo;
     }
 
-    printf("\n%#12x | %#12x %#12x | %#12x | %d\n", ppu.vReg.field.coarseX, ppu.vReg.field.fineY, ppu.vReg.field.coarseY, ppu.vReg.field.nameTableID, scanline);
+    //printf("CX%#12x | FY%#12x CY%#12x | NT%#12x | S%d\n", ppu.vReg.field.coarseX, ppu.vReg.field.fineY, ppu.vReg.field.coarseY, ppu.vReg.field.nameTableID, scanline);
 
     if(bgPixel == 0) bgPal = 0;
 
-    int color = getFormatColorFromPaletteRam(bgPal, bgPixel);
-    unsigned long selected_pixel = PPU_WIDTH * scanline + cycle - 1;
+    #if 0
+    if(scanline >= 0){
+        int color = getFormatColorFromPaletteRam(bgPal, bgPixel);
+        unsigned long selected_pixel = PPU_WIDTH * scanline + cycle;
 
-    if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
-        //fprintf(stderr, "WARN: Out of bounds PPU access\n");
-    }else{
+        if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
+            fprintf(stderr, "WARN: Out of bounds PPU access img_addr=%li, max=%lu\n", selected_pixel,PPU_WIDTH*PPU_HEIGHT);
+        }else{
 
-        img_data[selected_pixel] = color;
+            img_data[selected_pixel] = color;
+        }
     }
+    #endif
 
 	cycle++;
 }
 
 //For if we ever want the ppu to run on a different thread
 static void* ppuThread(void* args){
-
+    #if 0
 	while(true){
-		ppuClock();
+		ppuClock(cpu);
 	}
+    #else
+        fprintf(stderr, "NOT IMPLEMENTED YET\n");
+        abort();
+    #endif
 
 	return args;
 }

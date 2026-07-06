@@ -1,3 +1,6 @@
+#ifndef CPU_H
+#define CPU_H
+
 #include "common.h"
 
 //Edit these defines to determine the debug outputs
@@ -68,3 +71,6 @@ void initCpu(CPU * cpu); //init cpu, allocate memory for opcode register and set
 void cpuNmi(CPU * cpu); //process non-maskable interrupt, do not use this to trigger nmi, run the activateCpuNmi function in the bus instead
 
 int cpuClock(CPU * cpu); //tick function
+
+
+#endif

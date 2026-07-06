@@ -1,4 +1,5 @@
 #include "bus.h"
+#include "cpu.h"
 #include <stdbool.h>
 
 //Credits to wiki.nesdev.com for these register graphs
@@ -54,6 +55,7 @@ typedef struct{
             byte spritePatternTable : 1;
             byte backgroundPatternTable : 1;
             byte spriteSize: 1;
+            byte masterSlaveSelect : 1;
             byte nmiVerticalBlank : 1;
         };
         byte full;
@@ -124,7 +126,7 @@ typedef struct{
 
 void initPpu();
 void dumpPpuBus();
-void ppuClock(void);
+void ppuClock(CPU* cpu);
 
 void ppuRegWrite(word address, byte data);
 byte ppuRegRead(word address);

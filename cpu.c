@@ -1,5 +1,7 @@
 #include "cpu.h" //plsease read the header file before reading this file
 #include "bus.h" //includes bus-wide definitions such as bus write/read functions and data types generic among all nes components
+#include <time.h>
+#include <unistd.h>
 
 
 //Addressing modes
@@ -1888,6 +1890,21 @@ void cpuNmi(CPU * cpu){
 
     //Read new address from NMI vector
     cpu->PC = decodeRomPCVector(ROM_VECTOR_NMI);
+
+    //Timing to prevent going past 60FPS
+    static clock_t min_duration = ((float)CLOCKS_PER_SEC)/60.0f;
+	static clock_t start = 0;
+
+    // Calculate the time elapsed
+	clock_t end = clock();
+	clock_t elapsed = end - start;
+
+	// Calculate remaining time to wait if needed
+	if (elapsed < min_duration) {
+	    // Sleep for the remaining time, converted to microseconds
+	    usleep((min_duration - elapsed) * 1000000 / CLOCKS_PER_SEC);
+	}
+    start = clock();
 }
 
 int cpuClock(CPU * cpu){

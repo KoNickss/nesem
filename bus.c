@@ -149,8 +149,6 @@ int main(int argc, char * argv[]){
         cpu->PC = romStartAddress; //Rom was not a test rom. Load normally
     }
 
-	clock_t min_duration = ((float)CLOCKS_PER_SEC)/60.0f;
-	clock_t start = clock();
     while(true){
 
         #ifdef DEBUG
@@ -161,21 +159,6 @@ int main(int argc, char * argv[]){
             #endif
         #endif
 
-        if(ppuGetNmiStatus()){
-	        // Calculate the time elapsed
-	       	clock_t end = clock();
-	       	clock_t elapsed = end - start;
-
-	        // Calculate remaining time to wait if needed
-	        if (elapsed < min_duration) {
-	            // Sleep for the remaining time, converted to microseconds
-	            usleep((min_duration - elapsed) * 1000000 / CLOCKS_PER_SEC);
-	        }
-            ppuClearNmiStatus();
-            cpuNmi(cpu);
-            start = clock();
-        }
-
         //
         //
         //RUN THE CPU CLOCK ONE TIME
@@ -183,7 +166,7 @@ int main(int argc, char * argv[]){
         debug_print_instruction(cpu, busRead8(cpu->PC));
 
         for(int i = 0; i < 3 * cpuCycles; ++i)
-            ppuClock();
+            ppuClock(cpu);
         //
         //
         //

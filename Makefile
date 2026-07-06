@@ -1,6 +1,6 @@
 CC = cc
 CFLAGS = -Ofast
-CDEBUGFLAGS = -g -DDEBUG -g -O1 -fsanitize=address -fsanitize=undefined
+CDEBUGFLAGS = -g -DDEBUG -g
 LIBS=-lm -pthread -lX11 -lxcb
 RM = rm -rf
 OUTFILE = nesem
