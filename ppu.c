@@ -100,9 +100,6 @@ static byte ppuRead(word address){
             address -= 0x0010;
         }
 
-        if(address == 0x3F04 || address == 0x3F08 || address == 0x3F0C)
-            address = 0x3F00;
-
         if(address >= 0x3000 && address <= 0x3EFF) //mirrored region of nametables
             address -= 0x1000;
 
@@ -133,9 +130,6 @@ static void ppuWrite(word address, byte data){
         if (address == 0x3F10 || address == 0x3F14 || address == 0x3F18 || address == 0x3F1C) {
             address -= 0x0010;
         }
-
-        if(address == 0x3F04 || address == 0x3F08 || address == 0x3F0C)
-            address = 0x3F00;
 
         if(address >= 0x3000 && address <= 0x3EFF) //mirrored region of nametables
             address -= 0x1000;
@@ -335,7 +329,9 @@ static void sterlize_ppu(){
 }
 
 int getFormatColorFromPaletteRam(byte palette, byte pixel){
-    word addr = 0x3F00 + (palette << 2) + (pixel & 0x3F);
+    word addr;
+    if(pixel) addr = 0x3F00 + (palette << 2) + (pixel & 0x3F);
+    if(!pixel) addr = 0x3F00;
     byte data = ppuRead(addr);
     if(data > 63) return 0;
     return ppu.PALCOL[data];
