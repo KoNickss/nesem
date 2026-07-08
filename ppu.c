@@ -314,10 +314,27 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
 
 
 void dumpPpuBus(){
-
+    #if 0
     for(int i = 0; i < 0x3FFF; i++){
         printf("%02X ", ppuRead(i));
     }
+
+    #else
+
+    for(int i = 0; i < 0x3FFF/8; i++){
+        int available_to_read = 0x3FFF - i;
+        if(available_to_read > 8){
+            available_to_read = 8;
+        }
+
+        printf("%X: ", i * 8);
+        for(int j = 0; j < available_to_read; j++){
+            printf("%02X ", ppuBus[i * 8 + j]);
+        }
+        putc('\n', stdout);
+    }
+
+    #endif
 
 }
 
@@ -584,6 +601,9 @@ static void ppuPutTileRow(){
 
 
 void loadBackShifters(){
+    if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
+        return;
+    }
     ppu.bgShift.patternLo = (ppu.bgShift.patternLo & 0xFF00) | (bgLSBbuf); // LOAD incoming data at the bottom of the 16 bit shift register
     ppu.bgShift.patternHi = (ppu.bgShift.patternHi & 0xFF00) | (bgMSBbuf); // --||--
 
@@ -610,6 +630,9 @@ void loadBackShifters(){
 
 
 void updateShifters(){
+    if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
+        return;
+    }
     if(ppu.mask.showBackdropDebug | ppu.mask.showSpritesDebug){
         ppu.bgShift.patternLo <<= 1;
         ppu.bgShift.patternHi <<= 1;
@@ -624,6 +647,9 @@ void updateShifters(){
 //TODO: maybe make nametable id a union
 
 void incrementScrollX_Routine(){
+    if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
+        return;
+    }
     if(ppu.mask.showBackdropDebug || ppu.mask.showSpritesDebug){ //if rendering
 
         if(ppu.vReg.field.coarseX == 31){ // if leaving nametable
@@ -637,6 +663,9 @@ void incrementScrollX_Routine(){
 }
 
 void incrementScrollY_Routine(){
+    if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
+        return;
+    }
     if(ppu.mask.showBackdropDebug || ppu.mask.showSpritesDebug){ //if rendering
 
         if(ppu.vReg.field.fineY < 7){
@@ -659,6 +688,9 @@ void incrementScrollY_Routine(){
 }
 
 void resetAddressX_Routine(){ // IMPORTANT V SYNC
+    if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
+        return;
+    }
     if(ppu.mask.showBackdropDebug || ppu.mask.showSpritesDebug){ //if rendering
         ppu.vReg.field.nameTableID = (ppu.vReg.field.nameTableID & 0b10) | (ppu.tReg.field.nameTableID & 0b01); //GET NT_X from tREG
         ppu.vReg.field.coarseX = ppu.tReg.field.coarseX;
@@ -666,6 +698,9 @@ void resetAddressX_Routine(){ // IMPORTANT V SYNC
 }
 
 void resetAddressY_Routine(){ // IMPORTANT V SYNC
+    if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
+        return;
+    }
     if(ppu.mask.showBackdropDebug || ppu.mask.showSpritesDebug){ //if rendering
         ppu.vReg.field.fineY = ppu.tReg.field.fineY;
         ppu.vReg.field.coarseY = ppu.tReg.field.coarseY;
@@ -700,6 +735,8 @@ unsigned int* prepare_screen_image(void){
 
 void ppuClock(CPU* cpu){
     ppu.status.sprite0Hit=(scanline == 30) ;//&& (cycle >= 90); //TODO: Remove. 'Emulates' SMB1 sprite0hit
+    //ppu.status.sprite0Hit=(scanline >= 190) || (scanline == 30) ; //TODO: Remove. 'Emulates' Ebike sprite0hit
+
     //one tick of the PPU clock
     #if 0
         if(cycle % 8){
@@ -803,6 +840,8 @@ void ppuClock(CPU* cpu){
         #if PIXEL_SIZE == 1
             window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
         #else
+        //dumpPpuBus();
+        //sleep(3);
             window_update_image(SCREEN_WIDTH*PIXEL_SIZE, SCREEN_HEIGHT * PIXEL_SIZE, prepare_screen_image());
         #endif
     }

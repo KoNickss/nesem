@@ -103,7 +103,9 @@ typedef struct{
             byte greyscale : 1;
             byte showBackdropDebug : 1;
             byte showSpritesDebug : 1;
-            byte unused : 5;
+            byte enableBackgroundRendering : 1;
+            byte enableSpriteRendering : 1;
+            byte unused : 3;
         };
         byte full;
     }mask;
