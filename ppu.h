@@ -2,6 +2,11 @@
 #include "cpu.h"
 #include <stdbool.h>
 
+//This crops the game to the size of the TV. Disable to see things that are not normally visible
+#define PPU_DRAW_CROPPED_SCREEN true
+//Used for scaling the TV output to be 'x' larger
+#define PIXEL_SIZE (3)
+
 //Credits to wiki.nesdev.com for these register graphs
 //https://wiki.nesdev.com/w/index.php?title=PPU_registers
 

@@ -341,8 +341,15 @@ int getFormatColorFromPaletteRam(byte palette, byte pixel){
 #define PPU_WIDTH 341
 #define PPU_HEIGHT 262
 
-#define SCREEN_WIDTH 256
-#define SCREEN_HEIGHT 240
+#if PPU_DRAW_CROPPED_SCREEN == true
+    #define SCREEN_WIDTH 256
+    #define SCREEN_HEIGHT 240
+#else
+    #define SCREEN_WIDTH PPU_WIDTH
+    #define SCREEN_HEIGHT PPU_HEIGHT
+#endif
+
+
 void initPpu(){
     ppu.dataByteBuffer = 0;
     ppu.expectingLsb = 0;
@@ -433,8 +440,8 @@ void initPpu(){
 
 
     sterlize_ppu();
-
-    window_init(PPU_WIDTH, PPU_HEIGHT);
+    
+    window_init(SCREEN_WIDTH * PIXEL_SIZE, SCREEN_HEIGHT * PIXEL_SIZE);
 
     //pthread_create(&ppuThread_id, NULL, ppuThread, NULL);
 }
@@ -457,6 +464,8 @@ static const int TEST_COLORS[4] = {
 };
 
 static unsigned int img_data[PPU_WIDTH * PPU_HEIGHT];
+//static unsigned int window_img_data[(PPU_WIDTH * PIXEL_SIZE) * (PPU_HEIGHT * PIXEL_SIZE)];
+static unsigned int window_img_data[(SCREEN_WIDTH * PIXEL_SIZE) * (SCREEN_HEIGHT * PIXEL_SIZE)];
 static word crt_x = 0;
 
 
@@ -665,7 +674,32 @@ void resetAddressY_Routine(){ // IMPORTANT V SYNC
 }
 
 
+//Scales the raw PPU output and crops the sides
+unsigned int* prepare_screen_image(void){
+    const unsigned int EFFECTIVE_WIN_WIDTH = SCREEN_WIDTH * PIXEL_SIZE;
+
+    for(win_size_t y = 0; y < SCREEN_HEIGHT; y++){
+        for(win_size_t x = 0; x < SCREEN_WIDTH; x++){
+            unsigned int color = img_data[y * PPU_WIDTH + x];
+
+            //Write a PIXEL_SIZE * PIXEL_SIZE of one single color. This effectively does nearest neighbor scaling
+            for(win_size_t yy = 0; yy < PIXEL_SIZE; yy++){
+                win_size_t screen_y = y * PIXEL_SIZE + yy;
+                for(win_size_t xx = 0; xx < PIXEL_SIZE; xx++){
+                    win_size_t screen_x = x * PIXEL_SIZE + xx;
+
+                    window_img_data[EFFECTIVE_WIN_WIDTH * screen_y + screen_x] = color;
+                }
+            }
+        }
+    }
+
+    return window_img_data;
+}
+
+
 void ppuClock(CPU* cpu){
+    ppu.status.sprite0Hit=(scanline == 30) ;//&& (cycle >= 90); //TODO: Remove. 'Emulates' SMB1 sprite0hit
     //one tick of the PPU clock
     #if 0
         if(cycle % 8){
@@ -713,13 +747,13 @@ void ppuClock(CPU* cpu){
 
                 case 4:
                     //READ bg lsb
-                    bgLSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 0);
+                    bgLSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ((word)ppu.vReg.field.fineY) + 0);
                 break;
 
 
 
                 case 6:
-                    bgMSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ppu.vReg.field.fineY + 8);
+                    bgMSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ((word)ppu.vReg.field.fineY) + 8);
                     #if NORMAL_PUTROW
                         //ppuPutTileRow();
                     #endif
@@ -736,11 +770,11 @@ void ppuClock(CPU* cpu){
         }
     }
 
-    if(cycle == 256){ //done with visible row
+    if(cycle == 256 && scanline < 241){ //done with visible row
         incrementScrollY_Routine();
     }
 
-    if(cycle == 257){
+    if(cycle == 257 && scanline < 241){
         resetAddressX_Routine(); //incrementing Y means our X is now incorrect and needs resetting
     }
 
@@ -766,7 +800,11 @@ void ppuClock(CPU* cpu){
             //ppuPutTileRow();
         #endif
         //stbi_write_png("ppu.png", PPU_WIDTH, PPU_HEIGHT, 4, img_data, PPU_WIDTH * 4);
-        window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
+        #if PIXEL_SIZE == 1
+            window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
+        #else
+            window_update_image(SCREEN_WIDTH*PIXEL_SIZE, SCREEN_HEIGHT * PIXEL_SIZE, prepare_screen_image());
+        #endif
     }
 
     if(scanline >= 261){
