@@ -170,6 +170,38 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 				break;
 			}
 		break;
+		case GPAD_CON_XBOX:
+			switch(gp->model.xbox){
+				case GPAD_CON_MODEL_XBOX_360:
+					const float DEADZONE_STICK = 0.1;
+					const word START_MASK = 0b10000000;
+					const word SELECT_MASK = 0b1000000;
+					const word A_MASK = 0b1;
+					const word B_MASK = 0b100;
+					const word DPAD_AXIS = 3;
+					const word LSTICK_AXIS = 0;
+
+					joypad_set_button(joypad_index, BUTTON_START, gp->buttons & START_MASK);
+					joypad_set_button(joypad_index, BUTTON_SELECT, gp->buttons & SELECT_MASK);
+					joypad_set_button(joypad_index, BUTTON_A, gp->buttons & A_MASK);
+					joypad_set_button(joypad_index, BUTTON_B, gp->buttons & B_MASK);
+
+					bool left_pressed = gp->axis[DPAD_AXIS].x <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].x <= (DEADZONE_STICK * -1.0f);
+					bool right_pressed = gp->axis[DPAD_AXIS].x >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].x >= (DEADZONE_STICK * 1.0f);
+					bool up_pressed = gp->axis[DPAD_AXIS].y <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].y <= (DEADZONE_STICK * -1.0f);
+					bool down_pressed = gp->axis[DPAD_AXIS].y >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
+
+					joypad_set_button(joypad_index, BUTTON_DOWN, down_pressed);
+					joypad_set_button(joypad_index, BUTTON_UP, up_pressed);
+					joypad_set_button(joypad_index, BUTTON_RIGHT, right_pressed);
+					joypad_set_button(joypad_index, BUTTON_LEFT,left_pressed);
+				break;
+				default:
+					fprintf(stderr, "ERR: Unknown XBOX controller!\n");
+					_switch_controller_to_keyboard_input(joypad_index);
+				break;
+			}
+		break;
 		default:
 			fprintf(stderr, "ERR: Unknown Brand controller!\n");
 			_switch_controller_to_keyboard_input(joypad_index);
