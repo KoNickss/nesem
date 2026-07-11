@@ -1,6 +1,7 @@
 #include "window.h"
 #include "controller.h"
 #include "joystick.h"
+#include "sound.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xos.h>
@@ -11,6 +12,10 @@
 #include <pthread.h>
 
 #define WINDOW_TITLE "nesem"
+
+//Just in case we want to add clickable options on the sidbar
+#define WINDOW_DRAW_OFFSET_X (0)
+#define WINDOW_DRAW_OFFSET_Y (0)
 
 static Display* dis;
 static int screen;
@@ -104,8 +109,8 @@ static void Image_destroy(Image* __restrict o){
 
 
 void window_init(win_size_t width, win_size_t height){
-    window_width = width;
-    window_height = height;
+    window_width = width + WINDOW_DRAW_OFFSET_X;
+    window_height = height + WINDOW_DRAW_OFFSET_Y;
     window_mouse_x = 0;
     window_mouse_y = 0;
 
@@ -141,11 +146,17 @@ void window_init(win_size_t width, win_size_t height){
     gpad_device_list_t controller_list = gpad_list_devices();
     gpad_device_list_ent_t* plugged_in_controller =  *((gpad_device_list_ent_t**)controller_list);
     if(plugged_in_controller != NULL){
+        printf("\"%s\" plugged into controller port #1\n", plugged_in_controller->name);
         joypad_plug_in_contoller(JOYPAD_1, CONTROLLER_MODE_CONTROLLER, plugged_in_controller);
     }else{
         joypad_plug_in_contoller(JOYPAD_1, CONTROLLER_MODE_KEYBOARD, plugged_in_controller);
     }
     gpad_device_list_free(controller_list);
+
+    //Create sound engine
+    if(playback_start_audio_engine() == false){
+        fprintf(stderr, "Could not start audio engine!\n");
+    }
 
     //Create window thread
     result = pthread_create(&window_thread_id, NULL, window_thread, NULL);
@@ -184,9 +195,6 @@ static void window_redraw(void){
     //Redraw code goes here
 
     if(window_framebuffer.img_dat.ximg != NULL){
-        //Just in case we want to add clickable options on the sidbar
-        #define WINDOW_DRAW_OFFSET_X (0)
-        #define WINDOW_DRAW_OFFSET_Y (0)
         XPutImage(dis, window_framebuffer.frame, gc, (XImage*)window_framebuffer.img_dat.ximg, 0, 0, 0, 0, window_framebuffer.img_dat.width, window_framebuffer.img_dat.height);
         XCopyArea(dis, window_framebuffer.frame, win, gc, 0, 0, window_framebuffer.img_dat.width, window_framebuffer.img_dat.height, WINDOW_DRAW_OFFSET_X, WINDOW_DRAW_OFFSET_Y);
     }
@@ -286,6 +294,7 @@ void window_update_image(win_size_t width, win_size_t height, const void* __rest
 
     if(window_framebuffer.img_dat.ximg != NULL){
         Image_destroy(&window_framebuffer.img_dat);
+        window_framebuffer.img_dat.ximg = NULL;
     }
 
     Image_create(&window_framebuffer.img_dat, (Color*)image_data, width, height);
@@ -312,4 +321,6 @@ void window_destroy(void){
 
     pthread_mutex_unlock(&mutex);
     pthread_mutex_destroy(&mutex);
+
+    playback_destroy_audio_engine();
 }

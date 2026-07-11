@@ -14,3 +14,4 @@ mesen
 *.o
 *.inc
 *.zip
+miniaudio.h
