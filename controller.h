@@ -1,12 +1,22 @@
 #ifndef CONTROLLER_H
 #define CONTROLLER_H
 #include "common.h"
+#include "joystick.h"
 #include <stdbool.h>
 
 typedef enum{
 	JOYPAD_1,
 	JOYPAD_2
 }JOYPAD_t;
+
+typedef enum{
+	CONTROLLER_MODE____INVALID,
+	CONTROLLER_MODE_KEYBOARD,
+	CONTROLLER_MODE_CONTROLLER,
+
+	////////////////////////
+	CONTROLLER_MODE____SIZE
+}CONTROLLER_MODE_T;
 
 #if 0
 typedef enum{
@@ -33,11 +43,16 @@ typedef enum{
 #endif
 
 
+bool joypad_plug_in_contoller(JOYPAD_t joypad_index, CONTROLLER_MODE_T controller_type, gpad_device_list_ent_t* device_id);
+
+
 byte joypad_read_bit(JOYPAD_t joypad_index);
 
 void joypad_zero_out(JOYPAD_t joypad_index);
 
 void joypad_set_button(JOYPAD_t joypad_index, BUTTON_t bit_index, bool button_state);
+
+CONTROLLER_MODE_T joypad_get_joypad_mode(JOYPAD_t joypad_index);
 
 
 //Sets the current bit to read to the first bit

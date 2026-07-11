@@ -2,13 +2,20 @@
 #include "common.h"
 #include <stdio.h>
 
+
+
 typedef struct{
+	CONTROLLER_MODE_T control_mode;
+	gpad_t controller_obj;
 	byte state;
 	byte cur_bit_mask;
 	bool is_polled;
 }joypad_state_t;
 
-static joypad_state_t jp[2] = {{0, 1, false}, {0, 1, false}};
+static joypad_state_t jp[2] = {
+	{.control_mode=CONTROLLER_MODE____INVALID, .state=0, .cur_bit_mask=1, .is_polled=false}, 
+	{.control_mode=CONTROLLER_MODE____INVALID, .state=0, .cur_bit_mask=1, .is_polled=false}, 
+};
 
 #define JOYPAD_COUNT (sizeof(jp)/sizeof(joypad_state_t))
 
@@ -19,6 +26,36 @@ static inline void check_for_valid_jp(JOYPAD_t joypad_index){
 	}	
 }
 
+
+bool joypad_plug_in_contoller(JOYPAD_t joypad_index, CONTROLLER_MODE_T controller_type, gpad_device_list_ent_t* device_id){
+	check_for_valid_jp(joypad_index);
+
+	if(controller_type == CONTROLLER_MODE____INVALID || controller_type >= CONTROLLER_MODE____SIZE){
+		fprintf(stderr, "INVALID CONTROLLER MODE!\n");
+		return false;
+	}
+
+	jp[joypad_index].control_mode = controller_type;
+	if(controller_type == CONTROLLER_MODE_CONTROLLER){
+		if(gpad_construct_from_device_list_ent(&jp[joypad_index].controller_obj, device_id) == false){
+			fprintf(stderr, "ERR: Could not connect device \"%s\"\n", device_id->name);
+			jp[joypad_index].control_mode = CONTROLLER_MODE____INVALID;
+			jp[joypad_index].controller_obj.name = NULL;
+			jp[joypad_index].controller_obj.fd=-1;	
+		}
+	}else{
+		jp[joypad_index].controller_obj.name = NULL;
+		jp[joypad_index].controller_obj.fd=-1;	
+	}
+	joypad_zero_out(joypad_index);
+	jp[joypad_index].is_polled = false;
+}
+
+
+CONTROLLER_MODE_T joypad_get_joypad_mode(JOYPAD_t joypad_index){
+	check_for_valid_jp(joypad_index);
+	return jp[joypad_index].control_mode;
+}
 
 byte joypad_read_bit(JOYPAD_t joypad_index){
 	check_for_valid_jp(joypad_index);
@@ -50,9 +87,103 @@ void joypad_prepare_read(void){
 	}
 }
 
+
+static void _switch_controller_to_keyboard_input(JOYPAD_t joypad_index){
+	check_for_valid_jp(joypad_index);
+
+	joypad_state_t* cur_jp = &jp[joypad_index];
+	gpad_t* gp = &cur_jp->controller_obj;
+
+	fprintf(stderr, "ERR: Controller \"%s\" in Joypad slot #%i has disconnected! Switching to keyboard input\n", gp->name, joypad_index);
+	gpad_t_free(gp);
+	gp = NULL;
+	cur_jp->control_mode = CONTROLLER_MODE_KEYBOARD;
+	cur_jp->state = 0;
+}
+
+static inline bool _debug_get_joypad_button_state(JOYPAD_t joypad_index, BUTTON_t button){
+	byte bmask = 1 << button;
+	return jp[joypad_index].state & bmask;
+}
+
+static inline void _debug_print_joypad_state(JOYPAD_t joypad_index){
+	const char* bstates[] = {
+		_debug_get_joypad_button_state(joypad_index, BUTTON_A) ? "true" : "false",
+		_debug_get_joypad_button_state(joypad_index, BUTTON_B) ? "true" : "false",
+		_debug_get_joypad_button_state(joypad_index, BUTTON_START) ? "true" : "false",
+		_debug_get_joypad_button_state(joypad_index, BUTTON_SELECT) ? "true" : "false",
+		_debug_get_joypad_button_state(joypad_index, BUTTON_LEFT) ? "true" : "false",
+		_debug_get_joypad_button_state(joypad_index, BUTTON_RIGHT) ? "true" : "false",
+		_debug_get_joypad_button_state(joypad_index, BUTTON_UP) ? "true" : "false",
+		_debug_get_joypad_button_state(joypad_index, BUTTON_DOWN) ? "true" : "false",
+	};
+
+
+	fprintf(stderr, "A: %s B: %s St: %s Sl: %s l: %s r: %s u: %s d: %s\n", bstates[0],bstates[1],bstates[2],bstates[3],bstates[4],bstates[5],bstates[6],bstates[7]);
+}
+
+static void _poll_controller_state(JOYPAD_t joypad_index){
+	check_for_valid_jp(joypad_index);
+
+	joypad_state_t* cur_jp = &jp[joypad_index];
+	gpad_t* gp = &cur_jp->controller_obj;
+
+	if(gpad_read(gp) == false){
+		_switch_controller_to_keyboard_input(joypad_index);
+		return;
+	}
+
+	//Gpad is in valid state
+	switch(gp->brand){
+		case GPAD_CON_SONY:
+			switch(gp->model.sony){
+				case GPAD_CON_MODEL_SONY_PS5:
+					const float DEADZONE_STICK = 0.1;
+					const word START_MASK = 0b1000000000;
+					const word SELECT_MASK = 0b100000000;
+					const word A_MASK = 0b1;
+					const word B_MASK = 0b1000;
+					const word DPAD_AXIS = 3;
+					const word LSTICK_AXIS = 0;
+
+					joypad_set_button(joypad_index, BUTTON_START, gp->buttons & START_MASK);
+					joypad_set_button(joypad_index, BUTTON_SELECT, gp->buttons & SELECT_MASK);
+					joypad_set_button(joypad_index, BUTTON_A, gp->buttons & A_MASK);
+					joypad_set_button(joypad_index, BUTTON_B, gp->buttons & B_MASK);
+
+					bool left_pressed = gp->axis[DPAD_AXIS].x <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].x <= (DEADZONE_STICK * -1.0f);
+					bool right_pressed = gp->axis[DPAD_AXIS].x >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].x >= (DEADZONE_STICK * 1.0f);
+					bool up_pressed = gp->axis[DPAD_AXIS].y <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].y <= (DEADZONE_STICK * -1.0f);
+					bool down_pressed = gp->axis[DPAD_AXIS].y >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
+
+					joypad_set_button(joypad_index, BUTTON_DOWN, down_pressed);
+					joypad_set_button(joypad_index, BUTTON_UP, up_pressed);
+					joypad_set_button(joypad_index, BUTTON_RIGHT, right_pressed);
+					joypad_set_button(joypad_index, BUTTON_LEFT,left_pressed);
+
+					
+				break;
+				default:
+					fprintf(stderr, "ERR: Unknown Sony controller!\n");
+					_switch_controller_to_keyboard_input(joypad_index);
+					return;
+				break;
+			}
+		break;
+		default:
+			fprintf(stderr, "ERR: Unknown Brand controller!\n");
+			_switch_controller_to_keyboard_input(joypad_index);
+		break;
+	}
+} 
+
 //Fills the shift register and publishes the button states
 void joypad_publish_state(void){
 	for(int i = 0; i < JOYPAD_COUNT; i++){
+		if(joypad_get_joypad_mode(i) == CONTROLLER_MODE_CONTROLLER){
+			_poll_controller_state(i);
+		}
+
 		jp[i].is_polled = true;
 	}
 }

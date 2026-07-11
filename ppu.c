@@ -464,7 +464,7 @@ void initPpu(){
 }
 
 static int cycle = 0;
-static int scanline = 0;
+static int scanline = -1;
 
 static byte NTbuf;
 static byte ATbuf;
@@ -691,6 +691,7 @@ void resetAddressX_Routine(){ // IMPORTANT V SYNC
     if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
         return;
     }
+    //FIXME: Is the below 'if' statement bugged? Should it instead be the new 'ppu.mask.enableSpriteRendering' vars?
     if(ppu.mask.showBackdropDebug || ppu.mask.showSpritesDebug){ //if rendering
         ppu.vReg.field.nameTableID = (ppu.vReg.field.nameTableID & 0b10) | (ppu.tReg.field.nameTableID & 0b01); //GET NT_X from tREG
         ppu.vReg.field.coarseX = ppu.tReg.field.coarseX;
@@ -732,7 +733,6 @@ unsigned int* prepare_screen_image(void){
     return window_img_data;
 }
 
-
 void ppuClock(CPU* cpu){
     ppu.status.sprite0Hit=(scanline == 30) ;//&& (cycle >= 90); //TODO: Remove. 'Emulates' SMB1 sprite0hit
     //ppu.status.sprite0Hit=(scanline >= 190) || (scanline == 30) ; //TODO: Remove. 'Emulates' Ebike sprite0hit
@@ -762,7 +762,7 @@ void ppuClock(CPU* cpu){
     if(scanline >= -1 && scanline <= 239){
         //visible area
 
-        if((cycle >= 1 && cycle <= 257) || (cycle >= 321 && cycle <= 337)){
+        if((cycle >= 1 && cycle <= 257) || (cycle >= 321 && cycle <= 336)){
 
             updateShifters();
 
@@ -770,7 +770,6 @@ void ppuClock(CPU* cpu){
 
                 case 0:
                     //READ NameTable BYTE
-                    loadBackShifters();
                     // NTbuf = ppuBus[resolveNameTableAddress(ppu.vReg.data)]; WTF??
                     NTbuf = ppuRead(resolveNameTableAddress(ppu.vReg.data));
                 break;
@@ -794,6 +793,7 @@ void ppuClock(CPU* cpu){
                     #if NORMAL_PUTROW
                         //ppuPutTileRow();
                     #endif
+                    loadBackShifters();
                 break;
 
                 case 7:
@@ -820,13 +820,6 @@ void ppuClock(CPU* cpu){
     }
 
 
-    //SCANLINE over and reset counters
-    if(cycle >= 341){
-        cycle = 0;
-        scanline++;
-        crt_x = 0;
-    }
-
     if(scanline == 241 && cycle == 0){
         if(ppu.control.nmiVerticalBlank){
             cpuNmi(cpu);
@@ -840,13 +833,15 @@ void ppuClock(CPU* cpu){
         #if PIXEL_SIZE == 1
             window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
         #else
-        //dumpPpuBus();
-        //sleep(3);
+        #if DEBUG
+            //dumpPpuBus();
+            //sleep(1);
+        #endif
             window_update_image(SCREEN_WIDTH*PIXEL_SIZE, SCREEN_HEIGHT * PIXEL_SIZE, prepare_screen_image());
         #endif
     }
 
-    if(scanline >= 261){
+    if(scanline > 260){
         scanline = -1;
         crt_x = 0;
         ppu.status.vblank = false;
@@ -855,8 +850,9 @@ void ppuClock(CPU* cpu){
     byte bgPixel = 0;
     byte bgPal = 0;
 
+    //FIXME: Is this bugged? Should it be using the new 'ppu.mask.enable*' vars?
     if(ppu.mask.showBackdropDebug){
-        word bit_m = 0x8000 >> ppu.xReg;
+        word bit_m = 0x8000 >> ppu.xReg; //FIXME: Should we represent this as binary instead or is this an addr?
 
         byte pixelLo = (ppu.bgShift.patternLo & bit_m) > 0;
         byte pixelHi = (ppu.bgShift.patternHi & bit_m) > 0;
@@ -882,6 +878,12 @@ void ppuClock(CPU* cpu){
 
 
 	cycle++;
+    //SCANLINE over and reset counters
+    if(cycle >= 341){
+        cycle = 0;
+        scanline++;
+        crt_x = 0;
+    }
 }
 
 //For if we ever want the ppu to run on a different thread

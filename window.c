@@ -1,5 +1,6 @@
 #include "window.h"
 #include "controller.h"
+#include "joystick.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xos.h>
@@ -54,11 +55,10 @@ typedef struct{
     win_size_t height;
 }Image;
 
-static Image window_framebuffer = {
-    .ximg = NULL,
-    .width = 0,
-    .height = 0
-};
+static struct {
+    Image img_dat;
+    Pixmap frame;
+}window_framebuffer;
 static bool window_framebuffer_updated = false;
 
 #define USE_AGBR 1
@@ -123,6 +123,8 @@ void window_init(win_size_t width, win_size_t height){
     Atom wm_delete = XInternAtom( dis, "WM_DELETE_WINDOW", 1 );
     XSetWMProtocols( dis, win, &wm_delete, 1 );
 
+    window_framebuffer.frame = XCreatePixmap(dis, win, width, height, 24);
+
     //Draw Window
     XClearWindow(dis, win);
     XMapRaised(dis, win);
@@ -134,6 +136,16 @@ void window_init(win_size_t width, win_size_t height){
         fprintf(stderr, "ERR: Could not create mutex!\n");
         abort();
     }
+
+    //Check for controllers
+    gpad_device_list_t controller_list = gpad_list_devices();
+    gpad_device_list_ent_t* plugged_in_controller =  *((gpad_device_list_ent_t**)controller_list);
+    if(plugged_in_controller != NULL){
+        joypad_plug_in_contoller(JOYPAD_1, CONTROLLER_MODE_CONTROLLER, plugged_in_controller);
+    }else{
+        joypad_plug_in_contoller(JOYPAD_1, CONTROLLER_MODE_KEYBOARD, plugged_in_controller);
+    }
+    gpad_device_list_free(controller_list);
 
     //Create window thread
     result = pthread_create(&window_thread_id, NULL, window_thread, NULL);
@@ -171,11 +183,12 @@ static void window_redraw(void){
 
     //Redraw code goes here
 
-    if(window_framebuffer.ximg != NULL){
+    if(window_framebuffer.img_dat.ximg != NULL){
         //Just in case we want to add clickable options on the sidbar
         #define WINDOW_DRAW_OFFSET_X (0)
         #define WINDOW_DRAW_OFFSET_Y (0)
-        XPutImage(dis, win, gc, (XImage*)window_framebuffer.ximg, 0, 0, WINDOW_DRAW_OFFSET_X, WINDOW_DRAW_OFFSET_Y, window_framebuffer.width, window_framebuffer.height);
+        XPutImage(dis, window_framebuffer.frame, gc, (XImage*)window_framebuffer.img_dat.ximg, 0, 0, 0, 0, window_framebuffer.img_dat.width, window_framebuffer.img_dat.height);
+        XCopyArea(dis, window_framebuffer.frame, win, gc, 0, 0, window_framebuffer.img_dat.width, window_framebuffer.img_dat.height, WINDOW_DRAW_OFFSET_X, WINDOW_DRAW_OFFSET_Y);
     }
 
     XUnlockDisplay(dis);
@@ -187,6 +200,11 @@ static void window_redraw(void){
 
 static void window_handle_key(bool key_pressed, byte keycode){
 	bool valid_key_pressed = true;
+
+    if(joypad_get_joypad_mode(JOYPAD_1) == CONTROLLER_MODE_CONTROLLER){
+        return;
+    }
+
 	switch(keycode){
 		case 'w':
 			joypad_set_button(JOYPAD_1, BUTTON_UP, key_pressed);
@@ -266,11 +284,11 @@ void window_update_image(win_size_t width, win_size_t height, const void* __rest
     pthread_mutex_lock(&mutex);
 
 
-    if(window_framebuffer.ximg != NULL){
-        Image_destroy(&window_framebuffer);
+    if(window_framebuffer.img_dat.ximg != NULL){
+        Image_destroy(&window_framebuffer.img_dat);
     }
 
-    Image_create(&window_framebuffer, (Color*)image_data, width, height);
+    Image_create(&window_framebuffer.img_dat, (Color*)image_data, width, height);
 
     window_framebuffer_updated = true;
 
@@ -284,8 +302,8 @@ void window_destroy(void){
 
     pthread_cancel(window_thread_id);
 
-    if(window_framebuffer.ximg != NULL){
-        Image_destroy(&window_framebuffer);
+    if(window_framebuffer.img_dat.ximg != NULL){
+        Image_destroy(&window_framebuffer.img_dat);
     }
     XUnlockDisplay(dis);
     XFreeGC(dis, gc);
