@@ -128,7 +128,7 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 	joypad_state_t* cur_jp = &jp[joypad_index];
 	gpad_t* gp = &cur_jp->controller_obj;
 
-	if(gpad_read(gp) == false){
+	if(gpad_read(gp) != READ_OK){
 		_switch_controller_to_keyboard_input(joypad_index);
 		return;
 	}
