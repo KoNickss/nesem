@@ -90,7 +90,15 @@ static inline playback_channel_t* playback_channel_get(size_t index){
 
 void playback_channel_set_enable_state(size_t channel_id, bool state){
     pthread_mutex_lock(&playback_channels[channel_id].mutex);
-    playback_channels[channel_id].connected = true;
+    bool old_state = playback_channels[channel_id].connected;
+    playback_channels[channel_id].connected = state;
+
+    if(old_state == true && state == false){
+        //Tell the audio reader/writer to give up on any reads/writer.
+        pthread_cond_signal(&playback_channels[channel_id].cond_not_empty);
+        pthread_cond_signal(&playback_channels[channel_id].cond_not_full);
+    }
+    
     pthread_mutex_unlock(&playback_channels[channel_id].mutex);
 }
 
@@ -201,16 +209,27 @@ static size_t playback_channel_read_frames(playback_channel_t* chan, float* dest
     }
 }
 
-static void playback_channel_write_floats(size_t channel_id, const float* src, size_t num_floats){
+static size_t playback_channel_write_floats(size_t channel_id, const float* src, size_t num_floats){
     SMART_ASSERT(src != NULL, "Invalid src buffer!");
     SMART_ASSERT(channel_id < PLAYBACK_CHANNELS_COUNT, "Invalid playback channel_id of %lu", channel_id);
     pthread_mutex_lock(&playback_channels[channel_id].mutex);
     playback_channel_t* chan =  &playback_channels[channel_id];
 
+    if(playback_channels[channel_id].connected == false){
+        //Reject writes to disabled channel
+        pthread_mutex_unlock(&chan->mutex);
+        return 0;
+    }
+
 
     while(_playback_channel_add_to_cursor(chan,chan->head, 1) == chan->tail){
         //Wait for free data to become available
         pthread_cond_wait(&chan->cond_not_full, &chan->mutex);
+        if(chan->connected == false){
+            //If the channel was disconnected during a write, abort saving the floats and notify caller
+            pthread_mutex_unlock(&chan->mutex);
+            return 0;
+        }
     }
 
     size_t floats_written = 0;
@@ -227,18 +246,19 @@ static void playback_channel_write_floats(size_t channel_id, const float* src, s
 
     //If there are still floats left in the buffer to write, queue another write
     if(floats_written < num_floats && floats_written > 0){
-        playback_channel_write_floats(channel_id, src, num_floats - floats_written);
+        return floats_written + playback_channel_write_floats(channel_id, src, num_floats - floats_written);
     }
+    return floats_written;
 }
 
-void playback_channel_write_frames(size_t channel_id, const float* src, size_t num_frames){
+size_t playback_channel_write_frames(size_t channel_id, const float* src, size_t num_frames){
     if(num_frames == 0){
-        return;
+        return 0;
     }
     SMART_ASSERT(src != NULL, "Invalid src buffer!");
     SMART_ASSERT(channel_id < PLAYBACK_CHANNELS_COUNT, "Invalid playback channel_id of %lu", channel_id);
 
-    playback_channel_write_floats(channel_id, src, num_frames * CHANNEL_COUNT);
+    return playback_channel_write_floats(channel_id, src, num_frames * CHANNEL_COUNT);
 }
 
 
@@ -271,14 +291,28 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
             float volume = 0.0f;
             ma_uint64 totalFramesRead = frameCount - frames_remaining[i];
             
+            pthread_mutex_lock(&playback_channels[i].mutex);
             if(playback_channels[i].connected == false){
+                pthread_mutex_unlock(&playback_channels[i].mutex);
                 continue;
             }
-            pthread_mutex_lock(&playback_channels[i].mutex);
+            
             #if SOUND_WAIT_FOR_WRITES
-            if(previous_read_failed[i] && (playback_channels[i].head == playback_channels[i].tail)){
-                //Have the OS tell us when there is data to read so we are not doing 'busy waiting'
-                pthread_cond_wait(&playback_channels[i].cond_not_empty, &playback_channels[i].mutex);
+            if(previous_read_failed[i]){
+                bool channel_disabled_during_read = false;
+                while(playback_channels[i].head == playback_channels[i].tail){
+                    //Have the OS tell us when there is data to read so we are not doing 'busy waiting'
+                    pthread_cond_wait(&playback_channels[i].cond_not_empty, &playback_channels[i].mutex);
+                    if(playback_channels[i].connected == false){
+                        //Edge case just in case the channel was disabled when it was waiting for bytes
+                        channel_disabled_during_read = false;
+                        break;
+                    }
+                }
+                if(channel_disabled_during_read){
+                    pthread_mutex_unlock(&playback_channels[i].mutex);
+                    continue;
+                }
             }
             #endif
             volume = playback_channels[i].volume;
@@ -321,7 +355,27 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
 }
 
 
+#define ENABLE_AUDIO_TESTER false
 
+#if ENABLE_AUDIO_TESTER == true
+
+
+void* audio_thread(void* args){
+    FILE* f = fopen("/dev/shm/1.RAW", "rb");
+
+    float buffer[8048];
+    while (true) {
+        ssize_t bytes_read = fread(buffer, sizeof(float), sizeof(buffer)/sizeof(float), f);
+        if(bytes_read <= 0){
+            fseek(f, 0, SEEK_SET);
+            continue;
+        }
+
+        playback_channel_write_frames(0, buffer, sizeof(buffer)/sizeof(float)/2);
+    }
+}
+
+#endif
 
 
 static ma_device _audio_device;
@@ -350,6 +404,14 @@ bool playback_start_audio_engine(void){
     for(size_t i = 0; i < PLAYBACK_CHANNELS_COUNT; i++){
         playback_init_channel(&playback_channels[i]);
     }
+
+    #if ENABLE_AUDIO_TESTER == true
+    playback_channel_set_enable_state(0, true);
+    playback_channel_set_volume(0, 1.0f);
+
+    pthread_t th;
+    pthread_create(&th, NULL, audio_thread, NULL);
+    #endif
 
     return true;
 }

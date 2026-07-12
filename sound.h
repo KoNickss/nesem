@@ -16,7 +16,7 @@
 
 bool playback_start_audio_engine(void);
 
-void playback_channel_write_frames(size_t channel_id, const float* frames, size_t num_frames);
+size_t playback_channel_write_frames(size_t channel_id, const float* frames, size_t num_frames);
 
 void playback_channel_set_enable_state(size_t channel_id, bool state);
 
