@@ -45,6 +45,7 @@ typedef enum{
 
 bool joypad_plug_in_contoller(JOYPAD_t joypad_index, CONTROLLER_MODE_T controller_type, gpad_device_list_ent_t* device_id);
 
+bool joypad_read_specific_button(JOYPAD_t joypad_index, BUTTON_t button);
 
 byte joypad_read_bit(JOYPAD_t joypad_index);
 

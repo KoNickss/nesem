@@ -1,9 +1,9 @@
 #include "cartridge.h"
 #include "bus.h"
 
-HEADER Header;
-byte PRGROM[0xFFFF];
-byte CHRROM[0xFFFF];
+static HEADER Header;
+static byte PRGROM[K_SIZE * 16 * 16];
+static byte CHRROM[K_SIZE * 8 * 16];
 
 word not_handling_this = 0x100; //0xFF + 1
 
@@ -19,7 +19,7 @@ void loadRomfileHeader(FILE * romfile){
     byte verificationToken[3] = "NES";
     for(byte i = 0; i < 3; i++)
         if(verificationToken[i] != getc(romfile)){
-            fprintf(stderr, "ERR: This is not a NES Rom!!!\n");
+            PRINT_ERROR("rom", "This is not a NES Rom!!!");
             exit(EXIT_FAILURE);
             return;
         }
@@ -40,7 +40,7 @@ void initBanks(char name[]){
     romfile = fopen(name, "rb");
 
     if(romfile == NULL){
-        fprintf(stderr, "ERR: file \"%s\" could not be opened for reading!\n", name);
+        PRINT_ERROR("rom", "File \"%s\" could not be opened for reading!", name);
         exit(EXIT_FAILURE);
     }
 
@@ -48,19 +48,25 @@ void initBanks(char name[]){
 
     _verticalMirroring = Header.flags.flag6.mirroringMode;
 
-    if(Header.flags.flag6.trainer) //if trainer data
-        fseek(romfile, 512, SEEK_CUR);
+    if(Header.flags.flag6.trainer){ //if trainer data
+        int result = fseek(romfile, 512, SEEK_CUR);
+        SMART_ASSERT(result >= 0, "Rom says it has trainer data but ROM is not big enough or other IO error!");
+    }
 
 
-    fread(PRGROM, 1, GET_PRG_BANK_SIZE(Header.PRG_BANKS), romfile);
-    fread(CHRROM, 1, GET_PRG_BANK_SIZE(Header.CHR_BANKS), romfile);
+    SMART_ASSERT(GET_PRG_BANK_SIZE(Header.PRG_BANKS) <= sizeof(PRGROM), "You attempted to load a NES ROM with too large of a PRG bank! PRG bank count = %u", Header.PRG_BANKS);
+    SMART_ASSERT(GET_CHR_BANK_SIZE(Header.CHR_BANKS) <= sizeof(CHRROM), "You attempted to load a NES ROM with too large of a CHR bank! CHR bank count = %u", Header.PRG_BANKS);
+
+    int read_result = 0;
+    read_result=fread(PRGROM, 1, GET_PRG_BANK_SIZE(Header.PRG_BANKS), romfile);
+    SMART_ASSERT(read_result > 0, "Could not read PRGROM");
+    read_result=fread(CHRROM, 1, GET_CHR_BANK_SIZE(Header.CHR_BANKS), romfile);
+    SMART_ASSERT(read_result > 0, "Could not read CHRROM");
 
     unsigned long read_size = ftell(romfile);
     fseek(romfile, 0, SEEK_END);
     unsigned long file_size = ftell(romfile);
-    if(read_size != file_size){
-      fprintf(stderr, "WARNING: Bytes read does not match the file size! Nesem Reported = 0x%lX, File Size = 0x%lX!\n", read_size, file_size);
-    }
+    SMART_WARN(read_size == file_size, "Bytes read does not match the file size! Nesem Reported = 0x%lX, File Size = 0x%lX!\n", read_size, file_size);
 
     fclose(romfile);
 

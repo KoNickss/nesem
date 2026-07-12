@@ -28,10 +28,7 @@ void print_stack(CPU * cpu);
 
 //Gets a new PC to travel to for IRQ, NMI, and RESET
 static inline word decodeRomPCVector(word addr){
-	if(addr >= 0xFFFF || addr < 0xFFFA){
-		fprintf(stderr, "[%s] Invalid address of 0x%X!\n", __FUNCTION__, addr);
-		abort();
-	}
+    SMART_ASSERT(!(addr >= 0xFFFF || addr < 0xFFFA), "Invalid address of 0x%X", addr);
 	word ret = ((word)busRead8(addr + 1)) << 8;
 	ret |= busRead8(addr);
 	return ret;
@@ -704,11 +701,7 @@ void TYA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, busRea
 
 void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
 
-    cpu->opcodes = (struct instruction*)malloc(sizeof(struct instruction) * 0xFF); //allow memory for opcode array in cpu_opcodereg.h
-    if(cpu->opcodes == NULL){
-        fprintf(stderr, "ERR: Out of Memory\n");
-        exit(EXIT_FAILURE);
-    }
+    cpu->opcodes = (struct instruction*)xmalloc(sizeof(struct instruction) * 0xFF); //allow memory for opcode array in cpu_opcodereg.h
 
     //BRK codes
 

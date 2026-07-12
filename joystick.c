@@ -4,10 +4,10 @@
 #include <sys/ioctl.h>
 #include <linux/joystick.h>
 #include <stdlib.h>
-#include <malloc.h>
 #include <limits.h>
 #include <string.h>
 #include "joystick.h"
+#include "common.h"
 
 //https://www.kernel.org/doc/Documentation/input/joystick-api.txt
 
@@ -21,64 +21,9 @@ typedef struct js_event controller_event;
 #include <fcntl.h>
 #include <errno.h>
 
-static pthread_mutex_t __jsmutx;
-static pthread_t __jsthread = 0;
-static int __jsfd = 0;
 
 #include <dirent.h>
 
-static void searchFilesStartingWith(const char* folder, const char* prefix) {
-    DIR* dir = opendir(folder);
-    if (!dir) {
-        perror("opendir");
-        return;
-    }
-
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL) {
-        if (strncmp(entry->d_name, prefix, strlen(prefix)) == 0) {
-            printf("%s\n", entry->d_name);
-        }
-    }
-
-    closedir(dir);
-}
-
-
-
-#if 0
-static gpad_t pad;
-
-static void* js_thread(void* args){
-	while(1){
-		pthread_mutex_lock(&__jsmutx);
-
-		int read_result = gpad_read(&pad);
-		if(read_result == READ_FAILED){
-			pthread_mutex_unlock(&__jsmutx);
-			continue;
-		}else if (read_result >= READ_DEAD_CONTROLLER || read_result <= READ_INVALID){
-			if(pad.fd != -1){
-				close(pad.fd);
-			}
-			pad.fd = -1;
-			pthread_mutex_unlock(&__jsmutx);
-			return NULL;
-		}
-
-		pthread_mutex_unlock(&__jsmutx);
-	}
-	return args;
-}
-
-
-gpad_t gpad_thread_read(){
-	pthread_mutex_lock(&__jsmutx);
-	gpad_t ret = pad; //cache current state
-	pthread_mutex_unlock(&__jsmutx);
-	return ret;
-}
-#endif
 
 
 int gpad_read(gpad_t* gpad){
@@ -88,36 +33,34 @@ int gpad_read(gpad_t* gpad){
 		return READ_DEAD_CONTROLLER;
 	}
 
-	while(read(__jsfd, &e, sizeof(e)) > 0){
-		if(e.type & JS_EVENT_INIT) continue;
+	while(read(gpad->fd, &e, sizeof(e)) > 0){
+		//if(e.type & JS_EVENT_INIT) continue;
 
-		if((e.type & JS_EVENT_BUTTON) && gpad->button_count > 0){
-			gpad->buttons ^= (1 << e.number);
-			#ifdef DEBUG
-				if(e.number > gpad->button_count){
-					fprintf(stderr, "WARN: Button was pressed but it is a button that is more than the controller supports!\n");
+		if((e.type & JS_EVENT_BUTTON)){
+			if(gpad->button_count > 0){
+				if (e.value){
+					gpad->buttons |= (1u << e.number);
+				}else{
+					gpad->buttons &= ~(1u << e.number);
 				}
-			#endif
-			//printf("BUTT: %i, VAL: %i\n", e.number, e.value);
+			}else{
+				DWARN("Button event was sent but there are no buttons on the controller!");
+			}
+			SMART_WARN(e.number <= gpad->button_count, "Button was pressed but it is a button that is more than the controller supports! Pressed Button index = %i, button_count=%lu", e.number, gpad->button_count);
 		}
-		#ifdef DEBUG
-		if((e.type & JS_EVENT_BUTTON) && gpad->button_count <= 0){
-			fprintf(stderr, "WARN: Button event was sent but there are no buttons on the controller!\n");
+		if(e.type & JS_EVENT_AXIS){
+			if(gpad->axis_count > 0){
+				gpad->axis[e.number / 2].arrary[e.number % 2] = ((float)e.value) / 32767.0f;
+			}else{
+				DWARN("Axis event was sent but there are no axises on the controller!");
+			}
 		}
-		#endif
-		if((e.type & JS_EVENT_AXIS) && gpad->axis_count > 0){
-			gpad->axis[e.number / 2].arrary[e.number % 2] = ((float)e.value) / 32767.0f;
-		}
-		#ifdef DEBUG
-		if((e.type & JS_EVENT_AXIS) && gpad->axis_count <= 0){
-			fprintf(stderr, "WARN: Axis event was sent but there are no axises on the controller!\n");
-		}
-		#endif
 	}
 	if(errno != EAGAIN){
-		fprintf(stderr, "ERR: Error reading controler device!\n");
-		close(__jsfd);
-		__jsfd = -1;
+		PRINT_ERROR("controller", "Error reading controller device!");
+		DPERROR("Controller \"%s\" could not be read! reason=", gpad->name);
+		close(gpad->fd);
+		gpad->fd = -1;
 		return READ_FAILED;
 	}
 
@@ -135,7 +78,7 @@ static u_int16_t _get_uint16_file(const char file_path[], int js){
 	const char* buf2 = file_path;
 	FILE* f = fopen(buf2, "r");
 	if(f == NULL){
-		fprintf(stderr, "Could not open VENDOR ID for controller %i\n", js);
+		DERROR("Could not open VENDOR ID for controller %i", js);
 		return 0;
 	}
 	char name[5] = "    ";
@@ -165,7 +108,7 @@ static int get_events(int js, int events[], int events_len){
 	
 	DIR *dir = opendir(path);
     if (!dir) {
-        perror("opendir");
+        DPERROR("Could not get events for js=%i", js);
         return -1;
     }
 
@@ -312,10 +255,10 @@ static GPAD_CON_MODEL_XBOX_T _get_xbox_product(const vendor_data_t* vend){
 #define NAME_SIZE 512
 bool gpad_t_construct(gpad_t* gpad, unsigned int js){
 	char* device_path_buffer = (char*)alloca(PATH_MAX);
-	//gpad->axis = NULL;
-	//gpad->fd=-1;
-	//gpad->name=NULL;
-	//gpad->rumble_event = -1;
+	gpad->axis = NULL;
+	gpad->fd=-1;
+	gpad->name=NULL;
+	gpad->rumble_event = -1;
 
 	if (js > 99){
 		return false;
@@ -352,9 +295,9 @@ bool gpad_t_construct(gpad_t* gpad, unsigned int js){
 
 
 
-	if(__jsfd <= 0){
-		__jsfd = open(device_path_buffer, O_NONBLOCK | O_RDONLY);
-		if(__jsfd <= 0){
+	if(gpad->fd <= 0){
+		gpad->fd = open(device_path_buffer, O_NONBLOCK | O_RDONLY);
+		if(gpad->fd <= 0){
 			gpad->axis = NULL;
 			gpad->fd=-1;
 			gpad->name=NULL;
@@ -374,16 +317,12 @@ bool gpad_t_construct(gpad_t* gpad, unsigned int js){
 		case 0x054c://Sony
 			gpad->brand = GPAD_CON_SONY;
 			gpad->model.sony = _get_sony_product(&vendor);
-			#if DEBUG
-				fprintf(stderr, "SONY %X:%X\n", vendor.vendor_id, vendor.product_id);
-			#endif
+			DINFO("SONY %X:%X\n", vendor.vendor_id, vendor.product_id);
 		break;
 		case 0x045E:
 			gpad->brand = GPAD_CON_XBOX;
 			gpad->model.xbox = _get_xbox_product(&vendor);
-			#if DEBUG
-				fprintf(stderr, "MICROSOFT XBOX %X:%X\n", vendor.vendor_id, vendor.product_id);
-			#endif
+			DINFO("MICROSOFT XBOX %X:%X\n", vendor.vendor_id, vendor.product_id);
 		break;
 		case 0:
 			gpad->brand = GPAD_CON_INVALID;
@@ -393,31 +332,27 @@ bool gpad_t_construct(gpad_t* gpad, unsigned int js){
 		default:
 			gpad->brand = GPAD_CON_UNKNOWN;
 			gpad->model.sony = GPAD_CON_MODEL_SONY_UNKNOWN;
-			#if DEBUG
-				fprintf(stderr, "UNKNOWN %X:%X\n", vendor.vendor_id, vendor.product_id);
-			#endif
+			DINFO("UNKNOWN %X:%X\n", vendor.vendor_id, vendor.product_id);
 		break;
 	}
 
 
 	//Get number of axises
 	char number_of_axes;
-	ioctl (__jsfd, JSIOCGAXES, &number_of_axes);
+	int ret_val = ioctl (gpad->fd, JSIOCGAXES, &number_of_axes);
 
-	if(number_of_axes <= 0){
-		fprintf(stderr, "WARN: Number of sticks are less than 0! Assuming this is a non-analog controller\n");
+	if(number_of_axes <= 0 || ret_val < 0){
+		DWARN("Number of sticks are less than 0! Assuming this is a non-analog controller");
 		number_of_axes = 0;
 	}
 
 	if(number_of_axes > 0){
 		gpad->axis_count = number_of_axes;
-		gpad->axis = (gpad_axis_t*)malloc(sizeof(gpad_axis_t) * gpad->axis_count);
-		#ifdef DEBUG
-			if(gpad->axis == NULL){
-				fprintf(stderr, "ERR: Out of RAM!\n");
-				abort();
-			}
-		#endif
+		gpad->axis = (gpad_axis_t*)xmalloc(sizeof(gpad_axis_t) * gpad->axis_count);
+		for(size_t i = 0; i < gpad->axis_count; i++){
+			gpad->axis[i].x = 0;
+			gpad->axis[i].y = 0;
+		}
 	}else{
 		gpad->axis_count = 0;
 		gpad->axis = NULL;
@@ -425,10 +360,10 @@ bool gpad_t_construct(gpad_t* gpad, unsigned int js){
 
 	//get button count
 	char number_of_buttons;
-	ioctl (__jsfd, JSIOCGBUTTONS, &number_of_buttons);
+	ret_val = ioctl (gpad->fd, JSIOCGBUTTONS, &number_of_buttons);
 
-	if(number_of_buttons <= 0){
-		fprintf(stderr, "WARN: Number of buttons are less than 0! Assuming this is an analog-only controller\n");
+	if(number_of_buttons <= 0 || ret_val < 0){
+		DWARN("Number of buttons are less than 0! Assuming this is an analog-only controller\n");
 		number_of_buttons = 0;
 	}
 
@@ -437,14 +372,8 @@ bool gpad_t_construct(gpad_t* gpad, unsigned int js){
 
 	//Get name
 	
-	gpad->name = (char*)malloc(NAME_SIZE);
-	#ifdef DEBUG
-		if(gpad->name == NULL){
-			fprintf(stderr, "ERR: No RAM Left!\n");
-			abort();
-		}
-	#endif
-	if (ioctl(__jsfd, JSIOCGNAME(NAME_SIZE), gpad->name) < 0)
+	gpad->name = (char*)xmalloc(NAME_SIZE);
+	if (ioctl(gpad->fd, JSIOCGNAME(NAME_SIZE), gpad->name) < 0)
 		strncpy(gpad->name, "Unknown", NAME_SIZE);
 	gpad->name[NAME_SIZE-1]=0;
 
@@ -492,7 +421,6 @@ static inline bool is_device_list_soft_blacklisted(const char* name){
 	Returns NULL on failure or no devices
 */
 gpad_device_list_t gpad_list_devices(void){
-	#if 1
 	size_t num_of_devices = 0;
 	char* device_path_buffer = (char*)alloca(PATH_MAX);
 
@@ -508,20 +436,11 @@ gpad_device_list_t gpad_list_devices(void){
 		}
 	}while(true);
 
-	gpad_device_list_t ret = (gpad_device_list_t)malloc(sizeof(gpad_device_list_ent_real_t*) * (num_of_devices + 1));
-	if (ret == NULL){
-		return NULL;
-	}
+	gpad_device_list_t ret = (gpad_device_list_t)xmalloc(sizeof(gpad_device_list_ent_real_t*) * (num_of_devices + 1));
 	
 	size_t cur_cursor = 0;
 	for(size_t i = 0; i < num_of_devices; i++){
-		char* name = (char*)malloc(NAME_SIZE);
-		#ifdef DEBUG
-			if(name == NULL){
-				fprintf(stderr, "ERR: No RAM Left!\n");
-				abort();
-			}
-		#endif
+		char* name = (char*)xmalloc(NAME_SIZE);
 
 		sprintf(device_path_buffer, "/dev/input/js%lu", i);
 		int fd = open(device_path_buffer, O_NONBLOCK | O_RDONLY);
@@ -536,13 +455,7 @@ gpad_device_list_t gpad_list_devices(void){
 			continue;
 		}
 
-		gpad_device_list_ent_real_t* dev_ent = (gpad_device_list_ent_real_t*)malloc(sizeof(gpad_device_list_ent_real_t));
-		#if DEBUG
-			if(dev_ent == NULL){
-				fprintf(stderr, "ERR: No RAM Left!\n");
-				abort();
-			}
-		#endif
+		gpad_device_list_ent_real_t* dev_ent = (gpad_device_list_ent_real_t*)xmalloc(sizeof(gpad_device_list_ent_real_t));
 		size_t js = i;
 		dev_ent->name = name;
 		dev_ent->data.js = js;
@@ -560,53 +473,6 @@ gpad_device_list_t gpad_list_devices(void){
 	}
 	ret[num_of_devices] = NULL;
 	return ret;
-	#else
-
-	size_t num_of_devices = 0;
-	char* device_path_buffer = (char*)alloca(strlen("/sys/class/input/js000"));
-
-	do{
-		if (num_of_devices > 99){
-			return NULL;
-		}
-		sprintf(device_path_buffer, "/sys/class/input/js%lu", num_of_devices);
-		if (access(device_path_buffer, F_OK) == 0) {
-			num_of_devices++;
-		} else {
-			break;
-		}
-	}while(true);
-
-	gpad_device_list_t ret = (gpad_device_list_t)malloc(sizeof(char*) * (num_of_devices + 1));
-	if (ret == NULL){
-		return NULL;
-	}
-	
-	for(size_t i = 0; i < num_of_devices; i++){
-		char* name = (char*)malloc(NAME_SIZE);
-		#ifdef DEBUG
-			if(name == NULL){
-				fprintf(stderr, "ERR: No RAM Left!\n");
-				abort();
-			}
-		#endif
-		sprintf(device_path_buffer, "/sys/class/input/js%lu", i);
-		int fd = open(device_path_buffer, O_NONBLOCK | O_RDONLY);
-		if (ioctl(fd, JSIOCGNAME(NAME_SIZE), name) < 0)
-			strncpy(name, "Unknown", NAME_SIZE);
-		close(fd);
-		
-		
-
-		ret[i] = malloc(sizeof(gpad_device_list_ent_t));
-		if(name == NULL){
-			return ret;
-		}
-	}
-	ret[num_of_devices].name=NULL;
-	return ret;
-
-	#endif
 }
 
 gpad_device_list_ent_t* gpad_device_list_get(gpad_device_list_t dev_list, unsigned int index){
@@ -624,15 +490,10 @@ gpad_device_list_ent_t* gpad_device_list_get(gpad_device_list_t dev_list, unsign
 }
 
 gpad_device_list_ent_t* gpad_device_list_ent_memdup(const gpad_device_list_ent_t* ent){
-	gpad_device_list_ent_t* ret = (gpad_device_list_ent_t*)malloc(sizeof(gpad_device_list_ent_real_t));
-	#if DEBUG
-		if(ret == NULL){
-			fprintf(stderr, "ERR: out of mem!\n");
-			return NULL;
-		}
-	#endif
+	gpad_device_list_ent_t* ret = (gpad_device_list_ent_t*)xmalloc(sizeof(gpad_device_list_ent_real_t));
 	memcpy(ret, ent, sizeof(gpad_device_list_ent_real_t));
 	ret->name = strndup(ent->name, PATH_MAX);
+	SMART_ASSERT(ret->name != NULL, "Could not dup ent name!");
 	return ret;
 }
 
@@ -663,15 +524,8 @@ void gpad_t_free(gpad_t* gpad){
 		free(gpad->name);
 	gpad->axis = NULL;
 	gpad->name = NULL;
+	if(gpad->fd >= 0){
+		SMART_ASSERT(close(gpad->fd) == 0, "Could not close gamepad");
+	}
 	memset(gpad, 0, sizeof(gpad_t));
-}
-
-void gpad_thread_stop(){
-	pthread_mutex_lock(&__jsmutx);
-	pthread_join(__jsthread, NULL);
-	close(__jsfd);
-	__jsfd = 0;
-
-	pthread_mutex_unlock(&__jsmutx);
-	pthread_mutex_destroy(&__jsmutx);
 }

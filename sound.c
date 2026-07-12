@@ -1,6 +1,7 @@
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
 #include "sound.h"
+#include "common.h"
 #include <pthread.h>
 #include <stdbool.h>
 
@@ -55,6 +56,7 @@ playback_channel_t playback_channels[] = {
 
 static bool playback_init_channel(playback_channel_t* chan){
     if(chan == NULL){
+        DERROR("The channel is NULL!");
         return false;
     }
     chan->head = chan->buffer;
@@ -62,15 +64,18 @@ static bool playback_init_channel(playback_channel_t* chan){
     chan->connected = false;
     chan->volume = 0.0f;
     if(pthread_mutex_init(&chan->mutex, NULL) != 0){
+        DERROR("Could not create the mutex for channel %lu", chan-playback_channels);
         return false;
     }
     if(pthread_cond_init(&chan->cond_not_empty, NULL) != 0){
         pthread_mutex_destroy(&chan->mutex);
+        DERROR("Could not create the pthread cond for 'not_empty' %lu", chan-playback_channels);
         return false;
     }
     if(pthread_cond_init(&chan->cond_not_full, NULL) != 0){
         pthread_mutex_destroy(&chan->mutex);
         pthread_cond_destroy(&chan->cond_not_empty);
+        DERROR("Could not create the pthread cond for 'not_full' %lu", chan-playback_channels);
         return false;
     }
     memset(chan->buffer, 0, sizeof(chan->buffer));
@@ -105,7 +110,7 @@ static size_t playback_channel_get_frames_available(playback_channel_t* chan){
         return ret;
     }else{
         const float* buffer_end = chan->buffer + (sizeof(chan->buffer)/sizeof(float)); 
-        ret = ((size_t)(buffer_end - chan->tail))/sizeof(float) + (size_t)(chan->head - chan->buffer);
+        ret = ((size_t)(buffer_end - chan->tail)) + (size_t)(chan->head - chan->buffer);
         pthread_mutex_unlock(&chan->mutex);
         return ret;
     }
@@ -115,19 +120,27 @@ static size_t playback_channel_get_frames_available(playback_channel_t* chan){
 
 
 static  float* _playback_channel_add_to_cursor(const playback_channel_t* chan, const float* cursor, size_t amount){
+    SMART_ASSERT(cursor != NULL, "Invalid cursor pointer!");
+    SMART_ASSERT(chan != NULL, "Invalid playback channel!");
+
     const float* buffer_end = chan->buffer + PLAYBACK_BUFFER_SIZE; 
     cursor += amount;
-    if(cursor >= buffer_end){
-        cursor = chan->buffer;
-        if(cursor < chan->buffer){
-            abort();
-        }
+    while(cursor >= buffer_end){
+        cursor = chan->buffer + (cursor - buffer_end);
+        SMART_ASSERT(cursor >= chan->buffer, "Head or tail cursor just went OOB! buffer=%p, h=%p, t=%p, c=%p", chan->buffer, chan->head, chan->tail, cursor);
     }
     return (float*)cursor;
 }
 
 
 static size_t playback_channel_read_frames(playback_channel_t* chan, float* dest, size_t num_frames){
+    SMART_ASSERT(dest != NULL, "Invalid dest buffer!");
+    SMART_ASSERT(chan != NULL, "Invalid playback channel!");
+
+    if(num_frames == 0){
+        return 0;
+    }
+
     pthread_mutex_lock(&chan->mutex);
     if(chan->head == chan->tail){
         pthread_mutex_unlock(&chan->mutex);
@@ -188,10 +201,9 @@ static size_t playback_channel_read_frames(playback_channel_t* chan, float* dest
     }
 }
 
-void playback_channel_write_frames(size_t channel_id, const float* src, size_t num_frames){
-    if(num_frames == 0){
-        return;
-    }
+static void playback_channel_write_floats(size_t channel_id, const float* src, size_t num_floats){
+    SMART_ASSERT(src != NULL, "Invalid src buffer!");
+    SMART_ASSERT(channel_id < PLAYBACK_CHANNELS_COUNT, "Invalid playback channel_id of %lu", channel_id);
     pthread_mutex_lock(&playback_channels[channel_id].mutex);
     playback_channel_t* chan =  &playback_channels[channel_id];
 
@@ -201,26 +213,37 @@ void playback_channel_write_frames(size_t channel_id, const float* src, size_t n
         pthread_cond_wait(&chan->cond_not_full, &chan->mutex);
     }
 
-    size_t frames_written = 0;
-    while(_playback_channel_add_to_cursor(chan,chan->head, 1) != chan->tail && frames_written < num_frames){
+    size_t floats_written = 0;
+    while(_playback_channel_add_to_cursor(chan,chan->head, 1) != chan->tail && floats_written < num_floats){
         *chan->head = *src;
         src++;
         chan->head = _playback_channel_add_to_cursor(chan, chan->head, 1);
-        frames_written++;
+        floats_written++;
     }
 
 
     pthread_mutex_unlock(&chan->mutex);
     pthread_cond_signal(&chan->cond_not_empty); //Signal to reader that data is ready to be read
 
-    //If there are still frames left in the buffer to write, queue another write
-    if(frames_written < num_frames && frames_written > 0){
-        playback_channel_write_frames(channel_id, src, num_frames - frames_written);
+    //If there are still floats left in the buffer to write, queue another write
+    if(floats_written < num_floats && floats_written > 0){
+        playback_channel_write_floats(channel_id, src, num_floats - floats_written);
     }
+}
+
+void playback_channel_write_frames(size_t channel_id, const float* src, size_t num_frames){
+    if(num_frames == 0){
+        return;
+    }
+    SMART_ASSERT(src != NULL, "Invalid src buffer!");
+    SMART_ASSERT(channel_id < PLAYBACK_CHANNELS_COUNT, "Invalid playback channel_id of %lu", channel_id);
+
+    playback_channel_write_floats(channel_id, src, num_frames * CHANNEL_COUNT);
 }
 
 
 static void playback_channel_destroy(playback_channel_t* chan){
+    SMART_ASSERT(chan != NULL, "Channel was NULL!");
     pthread_mutex_destroy(&chan->mutex);
     pthread_cond_destroy(&chan->cond_not_empty);
     pthread_cond_destroy(&chan->cond_not_full);
@@ -273,6 +296,7 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
                     if(framesReadThisIteration == 0){
                         //This has the effect of just reading zeros as the current frame to play
                         framesReadThisIteration = framesToRead;
+                        DWARN("Emulator is lagging! Audio is being filled with zeros to compensate");
                     }
                 #endif
 
@@ -300,9 +324,6 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
 
 
 
-
-
-
 static ma_device _audio_device;
 bool playback_start_audio_engine(void){
     ma_result result;
@@ -316,12 +337,12 @@ bool playback_start_audio_engine(void){
     deviceConfig.pUserData         = NULL;
 
     if (ma_device_init(NULL, &deviceConfig, &_audio_device) != MA_SUCCESS) {
-        fprintf(stderr, "Failed to open playback device.\n");
+        PRINT_ERROR("audio", "Failed to open playback device.\n");
         return false;
     }
 
     if (ma_device_start(&_audio_device) != MA_SUCCESS) {
-        fprintf(stderr, "Failed to start playback device.\n");
+        PRINT_ERROR("audio", "Failed to start playback device.\n");
         ma_device_uninit(&_audio_device);
         return false;
     }
@@ -330,10 +351,14 @@ bool playback_start_audio_engine(void){
         playback_init_channel(&playback_channels[i]);
     }
 
-
     return true;
 }
 
+
 void playback_destroy_audio_engine(void){
+    for(size_t i = 0; i < PLAYBACK_CHANNELS_COUNT; i++){
+        playback_channel_destroy(playback_channel_get(i));
+    }
+
     ma_device_uninit(&_audio_device);
 }

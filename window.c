@@ -17,6 +17,8 @@
 #define WINDOW_DRAW_OFFSET_X (0)
 #define WINDOW_DRAW_OFFSET_Y (0)
 
+#define WINDOW_ENABLE_CONTROLLER_OVERLAY true
+
 static Display* dis;
 static int screen;
 static Window win;
@@ -72,7 +74,7 @@ static void Image_create(Image* __restrict o, Color* __restrict raw_pixels, win_
     o->width = width;
     o->height = height;
 
-    Color* raw_output = (Color*)malloc(sizeof(Color) * width * height);
+    Color* raw_output = (Color*)xmalloc(sizeof(Color) * width * height);
     if(raw_output == NULL){
         fprintf(stderr, "ERR: Out of memory! Tried to allocate %lu bytes\n", width * height * sizeof(Color));
         abort();
@@ -137,10 +139,7 @@ void window_init(win_size_t width, win_size_t height){
     int result;
     //Create window mutex
     result = pthread_mutex_init(&mutex, NULL);
-    if(result < 0){
-        fprintf(stderr, "ERR: Could not create mutex!\n");
-        abort();
-    }
+    SMART_ASSERT(result >= 0, "Could not create widnow mutex!");
 
     //Check for controllers
     gpad_device_list_t controller_list = gpad_list_devices();
@@ -155,15 +154,12 @@ void window_init(win_size_t width, win_size_t height){
 
     //Create sound engine
     if(playback_start_audio_engine() == false){
-        fprintf(stderr, "Could not start audio engine!\n");
+        PRINT_ERROR("audio", "Could not start audio engine!");
     }
 
     //Create window thread
     result = pthread_create(&window_thread_id, NULL, window_thread, NULL);
-    if(result < 0){
-        fprintf(stderr, "ERR: Could not create thread!\n");
-        abort();
-    }
+    SMART_ASSERT(result >= 0, "ERR: Could not create window thread!");
 }
 
 
@@ -177,6 +173,13 @@ static void window_flush(void){
     XFlush(dis);
     XUnlockDisplay(dis);
 }
+
+
+#if WINDOW_ENABLE_CONTROLLER_OVERLAY
+    #define WINDOW_CONTROLLER_OVERLAY_HEIGHT 25
+    #define WINDOW_CONTROLLER_OVERLAY_WIDTH  70
+    static unsigned int overlay_img_data[WINDOW_CONTROLLER_OVERLAY_WIDTH * WINDOW_CONTROLLER_OVERLAY_HEIGHT];
+#endif
 
 static void window_redraw(void){
     pthread_mutex_lock(&mutex);
@@ -196,6 +199,52 @@ static void window_redraw(void){
 
     if(window_framebuffer.img_dat.ximg != NULL){
         XPutImage(dis, window_framebuffer.frame, gc, (XImage*)window_framebuffer.img_dat.ximg, 0, 0, 0, 0, window_framebuffer.img_dat.width, window_framebuffer.img_dat.height);
+
+        #if WINDOW_ENABLE_CONTROLLER_OVERLAY
+            const unsigned int grey = 0xFFA0A0A0;
+            const unsigned int black = 0xFF000000;
+            const unsigned int red = 0xFF0000FF;
+            const unsigned int magenta = 0xFFFF00FF;
+            const unsigned int yellow = 0xFF00FFFF;
+            for(win_size_t y = 0; y < WINDOW_CONTROLLER_OVERLAY_HEIGHT; y++){
+                for(win_size_t x = 0; x < WINDOW_CONTROLLER_OVERLAY_WIDTH; x++){
+                    unsigned int color = grey;
+                    if (10 <= x && x <= 15 && 5 <= y && y <= 10){
+                        color = joypad_read_specific_button(0, BUTTON_UP) ? red : black;
+                    }
+                    if (10 <= x && x <= 15 && 15 <= y && y <= 20){
+                        color = joypad_read_specific_button(0, BUTTON_DOWN) ? red : black;
+                    }
+                    if (5 <= x && x <= 10 && 10 <= y && y <= 15){
+                        color = joypad_read_specific_button(0, BUTTON_LEFT) ? red : black;
+                    }
+                    if (15 <= x && x <= 20 && 10 <= y && y <= 15){
+                        color = joypad_read_specific_button(0, BUTTON_RIGHT) ? red : black;
+                    }
+                    if(25 <= x && x <= 30 && 10 <= y && y <= 13){
+                        color = joypad_read_specific_button(0, BUTTON_SELECT) ? magenta : black;
+                    }
+                    if(35 <= x && x <= 40 && 10 <= y && y <= 13){
+                        color = joypad_read_specific_button(0, BUTTON_START) ? magenta : black;
+                    }
+                    if(45 <= x && x <= 50 && 13 <= y && y <= 17){
+                        color = joypad_read_specific_button(0, BUTTON_B) ? yellow : black;
+                    }
+                    if(55 <= x && x <= 60 && 13 <= y && y <= 17){
+                        color = joypad_read_specific_button(0, BUTTON_A) ? yellow : black;
+                    }
+
+
+
+                    overlay_img_data[y * WINDOW_CONTROLLER_OVERLAY_WIDTH + x] = color;
+                }
+            }
+            Image img;
+            Image_create(&img, (Color*)overlay_img_data, WINDOW_CONTROLLER_OVERLAY_WIDTH, WINDOW_CONTROLLER_OVERLAY_HEIGHT);
+
+            XPutImage(dis, window_framebuffer.frame, gc, (XImage*)img.ximg, 0, 0, 0, window_height - WINDOW_CONTROLLER_OVERLAY_HEIGHT, img.width, img.height);
+            Image_destroy(&img);
+        #endif
         XCopyArea(dis, window_framebuffer.frame, win, gc, 0, 0, window_framebuffer.img_dat.width, window_framebuffer.img_dat.height, WINDOW_DRAW_OFFSET_X, WINDOW_DRAW_OFFSET_Y);
     }
 

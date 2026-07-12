@@ -86,12 +86,7 @@ void dumpBus(){
     FILE *fdump;
     fdump = fopen("dumpfile", "w");
 
-    #ifdef DEBUG
-        if(fdump == NULL){
-            fprintf(stderr, "ERR: Could not access file! Do I have permissions to create a file?\n");
-            exit(EXIT_FAILURE);
-        }
-    #endif
+    SMART_ASSERT(fdump != NULL, "ERR: Could not access file! Do you have permissions to create a file?\n");
 
     //If the file was successfuly opened then this code will run
     for(unsigned long long i = 0; i <= 0xFFFF; i++)
@@ -105,6 +100,7 @@ byte debug_read_do_not_use_pls(word address){
 
 static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
     handleErrors(cpu);
+    return;
     #ifdef DEBUG
         printf("\n--name: %s opcode: %02X address: %04X    %d %p\n",
             cpu->opcodes[opcode].name,
@@ -126,12 +122,12 @@ static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
 
 
 int main(int argc, char * argv[]){
-    CPU * cpu = (CPU*)malloc(sizeof(CPU)); //create new CPU
+    CPU * cpu = (CPU*)xmalloc(sizeof(CPU)); //create new CPU
 
     initCpu(cpu); //put new CPU in starting mode and dock it to the bus
 
     if(argc <= 1){ //Check to see if a rom was given
-        fprintf(stderr, "ERR: No Rom file Specified in Arguments\n");
+        PRINT_ERROR("rom", "No Rom file Specified in Arguments");
         exit(EXIT_FAILURE);
     }
 

@@ -19,26 +19,22 @@ static joypad_state_t jp[2] = {
 
 #define JOYPAD_COUNT (sizeof(jp)/sizeof(joypad_state_t))
 
-static inline void check_for_valid_jp(JOYPAD_t joypad_index){
-	if(joypad_index >= JOYPAD_COUNT){
-		fprintf(stderr, "ERR: Tried to read from joypad %d which does not exist!\n", joypad_index);
-		abort();
-	}	
-}
+
+#define check_for_valid_jp(joypad_index) SMART_ASSERT(joypad_index < JOYPAD_COUNT, "Tried to read from joypad %d which does not exist!\n", joypad_index);
 
 
 bool joypad_plug_in_contoller(JOYPAD_t joypad_index, CONTROLLER_MODE_T controller_type, gpad_device_list_ent_t* device_id){
 	check_for_valid_jp(joypad_index);
 
 	if(controller_type == CONTROLLER_MODE____INVALID || controller_type >= CONTROLLER_MODE____SIZE){
-		fprintf(stderr, "INVALID CONTROLLER MODE!\n");
+		DERROR("INVALID CONTROLLER MODE! Controller mode was %d", controller_type);
 		return false;
 	}
 
 	jp[joypad_index].control_mode = controller_type;
 	if(controller_type == CONTROLLER_MODE_CONTROLLER){
 		if(gpad_construct_from_device_list_ent(&jp[joypad_index].controller_obj, device_id) == false){
-			fprintf(stderr, "ERR: Could not connect device \"%s\"\n", device_id->name);
+			PRINT_ERROR("controller", "Could not connect device \"%s\"\n", device_id->name);
 			jp[joypad_index].control_mode = CONTROLLER_MODE____INVALID;
 			jp[joypad_index].controller_obj.name = NULL;
 			jp[joypad_index].controller_obj.fd=-1;	
@@ -94,28 +90,28 @@ static void _switch_controller_to_keyboard_input(JOYPAD_t joypad_index){
 	joypad_state_t* cur_jp = &jp[joypad_index];
 	gpad_t* gp = &cur_jp->controller_obj;
 
-	fprintf(stderr, "ERR: Controller \"%s\" in Joypad slot #%i has disconnected! Switching to keyboard input\n", gp->name, joypad_index);
+	PRINT_INFO("controller", "Controller \"%s\" in Joypad slot #%i has disconnected! Switching to keyboard input", gp->name, joypad_index);
 	gpad_t_free(gp);
 	gp = NULL;
 	cur_jp->control_mode = CONTROLLER_MODE_KEYBOARD;
 	cur_jp->state = 0;
 }
 
-static inline bool _debug_get_joypad_button_state(JOYPAD_t joypad_index, BUTTON_t button){
+bool joypad_read_specific_button(JOYPAD_t joypad_index, BUTTON_t button){
 	byte bmask = 1 << button;
 	return jp[joypad_index].state & bmask;
 }
 
 static inline void _debug_print_joypad_state(JOYPAD_t joypad_index){
 	const char* bstates[] = {
-		_debug_get_joypad_button_state(joypad_index, BUTTON_A) ? "true" : "false",
-		_debug_get_joypad_button_state(joypad_index, BUTTON_B) ? "true" : "false",
-		_debug_get_joypad_button_state(joypad_index, BUTTON_START) ? "true" : "false",
-		_debug_get_joypad_button_state(joypad_index, BUTTON_SELECT) ? "true" : "false",
-		_debug_get_joypad_button_state(joypad_index, BUTTON_LEFT) ? "true" : "false",
-		_debug_get_joypad_button_state(joypad_index, BUTTON_RIGHT) ? "true" : "false",
-		_debug_get_joypad_button_state(joypad_index, BUTTON_UP) ? "true" : "false",
-		_debug_get_joypad_button_state(joypad_index, BUTTON_DOWN) ? "true" : "false",
+		joypad_read_specific_button(joypad_index, BUTTON_A) ? "true" : "false",
+		joypad_read_specific_button(joypad_index, BUTTON_B) ? "true" : "false",
+		joypad_read_specific_button(joypad_index, BUTTON_START) ? "true" : "false",
+		joypad_read_specific_button(joypad_index, BUTTON_SELECT) ? "true" : "false",
+		joypad_read_specific_button(joypad_index, BUTTON_LEFT) ? "true" : "false",
+		joypad_read_specific_button(joypad_index, BUTTON_RIGHT) ? "true" : "false",
+		joypad_read_specific_button(joypad_index, BUTTON_UP) ? "true" : "false",
+		joypad_read_specific_button(joypad_index, BUTTON_DOWN) ? "true" : "false",
 	};
 
 
@@ -138,7 +134,7 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 		case GPAD_CON_SONY:
 			switch(gp->model.sony){
 				case GPAD_CON_MODEL_SONY_PS5:
-					const float DEADZONE_STICK = 0.1;
+					const float DEADZONE_STICK = 0.4;
 					const word START_MASK = 0b1000000000;
 					const word SELECT_MASK = 0b100000000;
 					const word A_MASK = 0b1;
@@ -164,7 +160,7 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 					
 				break;
 				default:
-					fprintf(stderr, "ERR: Unknown Sony controller!\n");
+					PRINT_ERROR("controller", "Unknown Sony controller!");
 					_switch_controller_to_keyboard_input(joypad_index);
 					return;
 				break;
@@ -173,7 +169,7 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 		case GPAD_CON_XBOX:
 			switch(gp->model.xbox){
 				case GPAD_CON_MODEL_XBOX_360:
-					const float DEADZONE_STICK = 0.1;
+					const float DEADZONE_STICK = 0.4;
 					const word START_MASK = 0b10000000;
 					const word SELECT_MASK = 0b1000000;
 					const word A_MASK = 0b1;
@@ -197,13 +193,13 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 					joypad_set_button(joypad_index, BUTTON_LEFT,left_pressed);
 				break;
 				default:
-					fprintf(stderr, "ERR: Unknown XBOX controller!\n");
+					PRINT_ERROR("controller", "Unknown XBOX controller!");
 					_switch_controller_to_keyboard_input(joypad_index);
 				break;
 			}
 		break;
 		default:
-			fprintf(stderr, "ERR: Unknown Brand controller!\n");
+			PRINT_ERROR("controller", "Unknown Brand controller!");
 			_switch_controller_to_keyboard_input(joypad_index);
 		break;
 	}
@@ -224,12 +220,10 @@ void joypad_publish_state(void){
 void joypad_set_button(JOYPAD_t joypad_index, BUTTON_t bit_index, bool button_state){
 	check_for_valid_jp(joypad_index);
 
-	if(bit_index >= 8){
-		fprintf(stderr, "ERR: jpad bit index of %d is too high!\n", bit_index);
-		abort();
-	}
+	SMART_ASSERT(bit_index < 8, "jpad #%i attempted to set bit index of %d but that is OOB!", joypad_index, bit_index);
 
 	#ifdef DEBUG
+	if(button_state != joypad_read_specific_button(joypad_index, bit_index)){
 		if(button_state == true){
 			fprintf(stderr, "Pressed ");
 		}else{
@@ -261,6 +255,7 @@ void joypad_set_button(JOYPAD_t joypad_index, BUTTON_t bit_index, bool button_st
 				fprintf(stderr, "Right Button\n");
 			break;
 		}
+	}
 
 	#endif
 

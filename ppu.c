@@ -472,130 +472,10 @@ static byte bgLSBbuf;
 static byte bgMSBbuf;
 
 
-//Format is AABBGGRR (aka reverse of rgba)
-static const int TEST_COLORS[4] = {
-	0xFF000000, //Black non-transparent
-	0xFF00FFFF, //Yellow non-transparent
-	0xFFFF00FF, //Magenta non-transparent
-	0xFFFFFF00  //Light-blue non-transparent
-};
 
 static unsigned int img_data[PPU_WIDTH * PPU_HEIGHT];
-//static unsigned int window_img_data[(PPU_WIDTH * PIXEL_SIZE) * (PPU_HEIGHT * PIXEL_SIZE)];
 static unsigned int window_img_data[(SCREEN_WIDTH * PIXEL_SIZE) * (SCREEN_HEIGHT * PIXEL_SIZE)];
 static word crt_x = 0;
-
-
-#define NORMAL_PUTROW 1
-#define FORCE_NAMETABLE_DRAW 0
-
-#define ppuPutTile_getHighestBit(val) ((val >> 7) & 0b1)
-
-
-static void ppuPutTileRow(){
-#if !NORMAL_PUTROW
-	byte selected_color;
-    int tile_offset = 0;
-    #if !FORCE_NAMETABLE_DRAW
-    for(int tile_num = 0; tile_num < 32*32; tile_num++){
-        for(int y = 0; y < 8; y++){
-            bgLSBbuf = ppuRead(y + (tile_num + tile_offset)*16);
-            bgMSBbuf = ppuRead(y + 8 + (tile_num+tile_offset)*16);
-            for(int x = 0; x < 8; x++){
-                selected_color = ppuPutTile_getHighestBit(bgLSBbuf);
-                selected_color |= ppuPutTile_getHighestBit(bgMSBbuf) << 1;
-
-                unsigned long selected_pixel = PPU_WIDTH * scanline + crt_x + x;
-                selected_pixel = PPU_WIDTH * (y + ((tile_num/32)*8)) + x + ((tile_num%32) * 8);
-                if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
-                    fprintf(stderr, "WARN: Out of bounds PPU access\n");
-                }else{
-                    img_data[selected_pixel] = TEST_COLORS[selected_color];
-                }
-                bgLSBbuf <<= 1;
-                bgMSBbuf <<= 1;
-            }
-        }
-    }
-    crt_x += 8;
-    #else
-    //NORMAL EXECUTION
-
-    for(int i = 0; i < 0x300; i++){
-
-        int tile_num = ppuRead(0x2000 + i);
-
-        for(int y = 0; y < 8; y++){
-
-            unsigned char bgLSBbuf1 = ppuRead(y + (tile_num + tile_offset)*16);
-            unsigned char bgMSBbuf1 = ppuRead(y + 8 + (tile_num+tile_offset)*16);
-
-            for(int x = 0; x < 8; x++){
-
-                selected_color = ppuPutTile_getHighestBit(bgLSBbuf1);
-                selected_color |= ppuPutTile_getHighestBit(bgMSBbuf1) << 1;
-
-                byte bgPixel = 0;
-                byte bgPal = 0;
-
-                if(ppu.mask.showBackdropDebug){
-                    word bit_m = 0x8000 >> ppu.xReg;
-
-                    byte pixelLo = (ppu.bgShift.patternLo & bit_m) > 0;
-                    byte pixelHi = (ppu.bgShift.patternHi & bit_m) > 0;
-                    bgPixel = (pixelHi << 1) | pixelLo;
-
-                    byte palLo = (ppu.bgShift.attrLo & bit_m) > 0;
-                    byte palHi = (ppu.bgShift.attrHi & bit_m) > 0;
-                    bgPal = (palHi << 1) | palLo;
-                }
-
-
-                int color = getFormatColorFromPaletteRam(bgPal, bgPixel);
-                unsigned long selected_pixel = PPU_WIDTH * scanline + crt_x + x;
-                selected_pixel = PPU_WIDTH * (y+((i/32)*8)) + x + ((i%32) * 8);
-
-                if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
-                    fprintf(stderr, "WARN: Out of bounds PPU access\n");
-                }else{
-
-                    img_data[selected_pixel] = TEST_COLORS[selected_color];
-                }
-
-
-                bgLSBbuf1 <<= 1;
-                bgMSBbuf1 <<= 1;
-            }
-        }
-    }
-    printf("HIHI");
-    crt_x += 8;
-    #endif
-#else
-	byte selected_color;
-    for(int x = 0; x < 8; x++){
-        selected_color = ppuPutTile_getHighestBit(bgLSBbuf);
-        selected_color |= ppuPutTile_getHighestBit(bgMSBbuf) << 1;
-
-
-
-        unsigned long selected_pixel = SCREEN_WIDTH * scanline + x + crt_x;
-        if(selected_pixel >= PPU_WIDTH*PPU_HEIGHT){
-            if( scanline >= 0){
-                fprintf(stderr, "WARN: Out of bounds PPU access\n");
-            }
-        }else{
-            //byte color = getFormatColorFromPaletteRam();
-            img_data[selected_pixel] = ppu.PALCOL[selected_color]; //doesnt display the correct color, i was just playing around
-        }
-
-        bgLSBbuf <<= 1;
-        bgMSBbuf <<= 1;
-    }
-    crt_x += 8;
-
-#endif
-}
 
 
 
@@ -734,23 +614,8 @@ unsigned int* prepare_screen_image(void){
 }
 
 void ppuClock(CPU* cpu){
-    ppu.status.sprite0Hit=(scanline == 30) ;//&& (cycle >= 90); //TODO: Remove. 'Emulates' SMB1 sprite0hit
-    //ppu.status.sprite0Hit=(scanline >= 190) || (scanline == 30) ; //TODO: Remove. 'Emulates' Ebike sprite0hit
-
-    //one tick of the PPU clock
-    #if 0
-        if(cycle % 8){
-            if(cycle > 0){
-                if(cycle - 1 % 2){
-                    //High Byte
-                }else{
-                    //Low Byte
-                }
-            }else{
-                //H-BLANK
-            }
-        }
-    #endif
+    //ppu.status.sprite0Hit=(scanline == 30) ;//&& (cycle >= 90); //TODO: Remove. 'Emulates' SMB1 sprite0hit
+    ppu.status.sprite0Hit=(scanline >= 190) || (scanline == 30) ; //TODO: Remove. 'Emulates' Ebike sprite0hit
 
     if(ppu.nmiNow){
         ppu.nmiNow = 0;
@@ -790,9 +655,6 @@ void ppuClock(CPU* cpu){
 
                 case 6:
                     bgMSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ((word)ppu.vReg.field.fineY) + 8);
-                    #if NORMAL_PUTROW
-                        //ppuPutTileRow();
-                    #endif
                     loadBackShifters();
                 break;
 
@@ -826,17 +688,13 @@ void ppuClock(CPU* cpu){
         }
         ppu.status.vblank = true;
         crt_x = 0;
-        #if !NORMAL_PUTROW
-            //ppuPutTileRow();
-        #endif
-        //stbi_write_png("ppu.png", PPU_WIDTH, PPU_HEIGHT, 4, img_data, PPU_WIDTH * 4);
         #if PIXEL_SIZE == 1
             window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
         #else
-        #if DEBUG
-            //dumpPpuBus();
-            //sleep(1);
-        #endif
+            #if DEBUG
+                //dumpPpuBus();
+                //sleep(1);
+            #endif
             window_update_image(SCREEN_WIDTH*PIXEL_SIZE, SCREEN_HEIGHT * PIXEL_SIZE, prepare_screen_image());
         #endif
     }
