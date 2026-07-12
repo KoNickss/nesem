@@ -41,6 +41,7 @@
                 PRINT_ERROR("malloc", "Out of memory! Attempted to allocate %lu bytes in %s:%lu in function \"%s\"", size, _file, _line, _func);
                 abort();
             }
+            return ret;
         }
         #define xmalloc(size) _xmalloc(size, __PRETTY_FUNCTION__, __FILE__, __LINE__)
     #else
@@ -62,6 +63,7 @@
                 PRINT_ERROR("malloc", "Out of memory! Attempted to allocate %lu bytes", size);
                 abort();
             }
+            return ret;
         }
         #define xmalloc(size) _xmalloc(size)
     #endif
