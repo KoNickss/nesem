@@ -78,5 +78,7 @@ void cpuNmi(CPU * cpu); //process non-maskable interrupt, do not use this to tri
 
 int cpuClock(CPU * cpu); //tick function
 
+void cpuDestroy(CPU* cpu);
+
 
 #endif

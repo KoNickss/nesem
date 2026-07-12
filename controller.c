@@ -266,3 +266,18 @@ void joypad_set_button(JOYPAD_t joypad_index, BUTTON_t bit_index, bool button_st
 }
 
 
+void joypad_disconnect(JOYPAD_t joypad_index){
+	check_for_valid_jp(joypad_index);
+
+	switch(joypad_get_joypad_mode(joypad_index)){
+		case CONTROLLER_MODE_CONTROLLER:
+			gpad_t_free(&jp[joypad_index].controller_obj);
+		break;
+		case CONTROLLER_MODE____INVALID:
+		break;
+		default:
+			DERROR("Could not delete controller with unknown type %d", joypad_get_joypad_mode(joypad_index));
+		break;
+	}
+	jp[joypad_index].control_mode = CONTROLLER_MODE____INVALID;
+}

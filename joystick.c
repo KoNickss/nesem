@@ -441,6 +441,7 @@ gpad_device_list_t gpad_list_devices(void){
 	size_t cur_cursor = 0;
 	for(size_t i = 0; i < num_of_devices; i++){
 		char* name = (char*)xmalloc(NAME_SIZE);
+		memset(name, 0, NAME_SIZE);
 
 		sprintf(device_path_buffer, "/dev/input/js%lu", i);
 		int fd = open(device_path_buffer, O_NONBLOCK | O_RDONLY);

@@ -62,8 +62,7 @@ void joypad_prepare_read(void);
 //Fills the shift register and publishes the button states
 void joypad_publish_state(void);
 
-
-
+void joypad_disconnect(JOYPAD_t joypad_index);
 
 
 

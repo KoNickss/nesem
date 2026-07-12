@@ -109,7 +109,7 @@ static void Image_destroy(Image* __restrict o){
 }
 
 
-
+static Atom wm_delete;
 void window_init(win_size_t width, win_size_t height){
     window_width = width + WINDOW_DRAW_OFFSET_X;
     window_height = height + WINDOW_DRAW_OFFSET_Y;
@@ -127,7 +127,7 @@ void window_init(win_size_t width, win_size_t height){
     XSelectInput(dis, win, ExposureMask|ButtonPressMask|KeyPressMask|KeyReleaseMask|StructureNotifyMask|DestroyNotify);
     gc=XCreateGC(dis, win, 0,0);
 
-    Atom wm_delete = XInternAtom( dis, "WM_DELETE_WINDOW", 1 );
+    wm_delete = XInternAtom( dis, "WM_DELETE_WINDOW", 1 );
     XSetWMProtocols( dis, win, &wm_delete, 1 );
 
     window_framebuffer.frame = XCreatePixmap(dis, win, width, height, 24);
@@ -293,6 +293,14 @@ static void window_handle_key(bool key_pressed, byte keycode){
 	}
 }
 
+
+
+static bool _window_program_should_exit = false;
+bool window_shutdown_triggered(void){
+    return _window_program_should_exit;
+}
+
+
 static void window_handle_event(XEvent* __restrict__ event){
     //Handle keystrokes here
 	char buf[128] = {0};
@@ -315,6 +323,12 @@ static void window_handle_event(XEvent* __restrict__ event){
     		window_handle_key(event->type == KeyPress, buf[0]);
     		(void)len;
     	break;
+        case ClientMessage:
+            if(event->xclient.data.l[0] == wm_delete){
+                _window_program_should_exit = true;
+                return;
+            }
+        break;
     	default:
 
     	break;
@@ -325,7 +339,7 @@ static void* window_thread(void* args){
     (void)args;
     
     XEvent event;
-    while(1){
+    while(_window_program_should_exit == false){
         XNextEvent(dis, &event);
 
         window_handle_event(&event);
@@ -370,6 +384,9 @@ void window_destroy(void){
 
     pthread_mutex_unlock(&mutex);
     pthread_mutex_destroy(&mutex);
+
+    joypad_disconnect(JOYPAD_1);
+    joypad_disconnect(JOYPAD_2);
 
     playback_destroy_audio_engine();
 }

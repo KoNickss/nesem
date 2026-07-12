@@ -21,6 +21,8 @@ unsigned char bus[BUS_SIZE]; //this is the bus array
 
 #include "controller.h"
 
+#include "window.h"
+
 #define TRANSLATE_PPU_ADDRESS(address) ((address - 0x2000) % 8 + 0x2000)
 
 void busWrite8(word address, word data){
@@ -173,6 +175,14 @@ int main(int argc, char * argv[]){
                 getchar();
             #endif
         #endif
+
+        if(window_shutdown_triggered()){
+            cpuDestroy(cpu);
+            free(cpu);
+
+            window_destroy();
+            return EXIT_SUCCESS;
+        }
     }
 
     #ifdef DEBUG

@@ -2006,3 +2006,9 @@ int cpuClock(CPU * cpu){
 
     return cycles; // returns number of needed cycles to caller so that
 }
+
+
+
+void cpuDestroy(CPU* cpu){
+    free(cpu->opcodes);
+}
