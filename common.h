@@ -18,7 +18,7 @@
 
 
     #define PRINT_WARN(subject, ...) fprintf(stderr, WARN_TEXT"WARN [%s]:\t", subject);fprintf(stderr, __VA_ARGS__); fprintf(stderr, RESET_TEXT"\n");
-    #define PRINT_ERROR(subject, ...) fprintf(stderr, WARN_TEXT"ERROR [%s]:\t", subject);fprintf(stderr, __VA_ARGS__); fprintf(stderr, RESET_TEXT"\n");
+    #define PRINT_ERROR(subject, ...) fprintf(stderr, ERROR_TEXT"ERROR [%s]:\t", subject);fprintf(stderr, __VA_ARGS__); fprintf(stderr, RESET_TEXT"\n");
     #define PRINT_INFO(subject, ...)fprintf(stderr, INFO_TEXT"INFO [%s]:\t", subject);fprintf(stderr, __VA_ARGS__); fprintf(stderr, RESET_TEXT"\n");
 
     #if DEBUG
