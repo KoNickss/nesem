@@ -5,7 +5,17 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-typedef struct{
+
+
+#if __has_attribute(aligned)
+    #define playback_sound_engine_align(a_value) __attribute__((aligned(a_value)))
+#else
+    #define playback_sound_engine_align(a_value)
+    #pragma message("Your compiler does not support struct alignment (or I am just stupid and it is possible on your compiler!). You will maybe see a hair of degraded performance in multithreaded channel situations")
+#endif
+
+
+typedef struct playback_sound_engine_align(64) {
     float* head;
     float* tail;
     float buffer[PLAYBACK_BUFFER_SIZE];
@@ -16,40 +26,22 @@ typedef struct{
     bool connected;
 }playback_channel_t;
 
+#define PLAYBACK_CHANNEL_INITIALIZER     {\
+        .head=NULL, \
+        .tail=NULL, \
+        .volume=0.0f, \
+        .mutex = PTHREAD_MUTEX_INITIALIZER, \
+        .cond_not_full = PTHREAD_COND_INITIALIZER, \
+        .cond_not_empty = PTHREAD_COND_INITIALIZER, \
+        .connected = false \
+    }
+
 
 playback_channel_t playback_channels[] = {
-    {
-        .head=NULL,
-        .tail=NULL,
-        .volume=0.0f,
-        .mutex = PTHREAD_MUTEX_INITIALIZER,
-        .cond_not_full = PTHREAD_COND_INITIALIZER,
-        .cond_not_empty = PTHREAD_COND_INITIALIZER
-    },
-    {
-        .head=NULL,
-        .tail=NULL,
-        .volume=0.0f,
-        .mutex = PTHREAD_MUTEX_INITIALIZER,
-        .cond_not_full = PTHREAD_COND_INITIALIZER,
-        .cond_not_empty = PTHREAD_COND_INITIALIZER
-    },
-    {
-        .head=NULL,
-        .tail=NULL,
-        .volume=0.0f,
-        .mutex = PTHREAD_MUTEX_INITIALIZER,
-        .cond_not_full = PTHREAD_COND_INITIALIZER,
-        .cond_not_empty = PTHREAD_COND_INITIALIZER
-    },
-    {
-        .head=NULL,
-        .tail=NULL,
-        .volume=0.0f,
-        .mutex = PTHREAD_MUTEX_INITIALIZER,
-        .cond_not_full = PTHREAD_COND_INITIALIZER,
-        .cond_not_empty = PTHREAD_COND_INITIALIZER
-    },
+    PLAYBACK_CHANNEL_INITIALIZER,
+    PLAYBACK_CHANNEL_INITIALIZER,
+    PLAYBACK_CHANNEL_INITIALIZER,
+    PLAYBACK_CHANNEL_INITIALIZER
 };
 
 #define PLAYBACK_CHANNELS_COUNT (sizeof(playback_channels)/sizeof(playback_channel_t))
@@ -59,10 +51,12 @@ static bool playback_init_channel(playback_channel_t* chan){
         DERROR("The channel is NULL!");
         return false;
     }
+
+    playback_channel_t tmp = PLAYBACK_CHANNEL_INITIALIZER;
+    *chan = tmp;
+
     chan->head = chan->buffer;
     chan->tail = chan->buffer;
-    chan->connected = false;
-    chan->volume = 0.0f;
     if(pthread_mutex_init(&chan->mutex, NULL) != 0){
         DERROR("Could not create the mutex for channel %lu", chan-playback_channels);
         return false;
@@ -212,41 +206,82 @@ static size_t playback_channel_read_frames(playback_channel_t* chan, float* dest
 static size_t playback_channel_write_floats(size_t channel_id, const float* src, size_t num_floats){
     SMART_ASSERT(src != NULL, "Invalid src buffer!");
     SMART_ASSERT(channel_id < PLAYBACK_CHANNELS_COUNT, "Invalid playback channel_id of %lu", channel_id);
-    pthread_mutex_lock(&playback_channels[channel_id].mutex);
-    playback_channel_t* chan =  &playback_channels[channel_id];
-
-    if(playback_channels[channel_id].connected == false){
-        //Reject writes to disabled channel
-        pthread_mutex_unlock(&chan->mutex);
-        return 0;
-    }
-
-
-    while(_playback_channel_add_to_cursor(chan,chan->head, 1) == chan->tail){
-        //Wait for free data to become available
-        pthread_cond_wait(&chan->cond_not_full, &chan->mutex);
-        if(chan->connected == false){
-            //If the channel was disconnected during a write, abort saving the floats and notify caller
-            pthread_mutex_unlock(&chan->mutex);
-            return 0;
-        }
-    }
-
     size_t floats_written = 0;
-    while(_playback_channel_add_to_cursor(chan,chan->head, 1) != chan->tail && floats_written < num_floats){
-        *chan->head = *src;
-        src++;
-        chan->head = _playback_channel_add_to_cursor(chan, chan->head, 1);
-        floats_written++;
-    }
+    
+
+    while(floats_written < num_floats){
+        pthread_mutex_lock(&playback_channels[channel_id].mutex);
+        playback_channel_t* chan =  &playback_channels[channel_id];
+        const float* BUFFER_END = chan->buffer + PLAYBACK_BUFFER_SIZE;
 
 
-    pthread_mutex_unlock(&chan->mutex);
-    pthread_cond_signal(&chan->cond_not_empty); //Signal to reader that data is ready to be read
+        if(playback_channels[channel_id].connected == false){
+            //Reject writes to disabled channel
+            pthread_mutex_unlock(&chan->mutex);
+            return floats_written;
+        }
 
-    //If there are still floats left in the buffer to write, queue another write
-    if(floats_written < num_floats && floats_written > 0){
-        return floats_written + playback_channel_write_floats(channel_id, src, num_floats - floats_written);
+        while(_playback_channel_add_to_cursor(chan, chan->head, 1) == chan->tail){
+            //Wait for free data to become available
+            pthread_cond_wait(&chan->cond_not_full, &chan->mutex);
+            if(chan->connected == false){
+                //If the channel was disconnected during a write, abort saving the floats
+                break;
+            }
+        }
+        //If the channel was disconnected during a write, abort saving the floats
+        if(chan->connected == false){
+            pthread_mutex_unlock(&chan->mutex);
+            break;
+        }
+
+        size_t floats_free = 0;
+        if(chan->tail <= chan->head){
+            floats_free = (chan->tail - chan->buffer) + (BUFFER_END - chan->head) - 1;
+        }else {
+            floats_free = (chan->tail - chan->head) - 1;
+        }
+
+        while(floats_free > 0 && floats_written < num_floats){
+            size_t floats_remaining = num_floats - floats_written;
+            if(chan->tail <= chan->head){
+                size_t floats_written_this_iter = BUFFER_END - chan->head;
+                if(floats_written_this_iter > floats_free){
+                    floats_written_this_iter = floats_free;
+                }
+                if(floats_written_this_iter >floats_remaining){
+                    floats_written_this_iter = floats_remaining;
+                }
+
+                memcpy(chan->head, src + floats_written, floats_written_this_iter * sizeof(float));
+                chan->head = _playback_channel_add_to_cursor(chan, chan->head, floats_written_this_iter);
+
+                floats_written += floats_written_this_iter;
+                floats_free -= floats_written_this_iter;
+                //If head has looped around to the other side, we will be able to write to the other side on the next loop.
+                //This is done to reuse logic and reduce code size
+            }else{
+                size_t floats_written_this_iter = floats_free;
+                if(floats_written_this_iter > floats_remaining){
+                    floats_written_this_iter = floats_remaining;
+                }
+
+                memcpy(chan->head, src + floats_written, floats_written_this_iter * sizeof(float));
+                chan->head = _playback_channel_add_to_cursor(chan, chan->head, floats_written_this_iter);
+
+                floats_written += floats_written_this_iter;
+                floats_free -= floats_written_this_iter;
+            }
+        }
+
+
+        pthread_mutex_unlock(&chan->mutex);
+        pthread_cond_signal(&chan->cond_not_empty); //Signal to reader that data is ready to be read
+
+        //If there are no floats left in the buffer to write, stop queuing writes
+        if(!(floats_written < num_floats && floats_written > 0)){
+            break;
+        }
     }
     return floats_written;
 }
@@ -302,7 +337,9 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
                 bool channel_disabled_during_read = false;
                 while(playback_channels[i].head == playback_channels[i].tail){
                     //Have the OS tell us when there is data to read so we are not doing 'busy waiting'
+                    puts("waiting for bytes to be written");
                     pthread_cond_wait(&playback_channels[i].cond_not_empty, &playback_channels[i].mutex);
+                    puts("bytes written");
                     if(playback_channels[i].connected == false){
                         //Edge case just in case the channel was disabled when it was waiting for bytes
                         channel_disabled_during_read = false;
@@ -355,7 +392,7 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
 }
 
 
-#define ENABLE_AUDIO_TESTER false
+#define ENABLE_AUDIO_TESTER true
 
 #if ENABLE_AUDIO_TESTER == true
 

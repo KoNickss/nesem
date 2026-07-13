@@ -116,6 +116,8 @@ void window_init(win_size_t width, win_size_t height){
     window_mouse_x = 0;
     window_mouse_y = 0;
 
+    XInitThreads();
+
     //Init Display
     dis=XOpenDisplay(NULL);
     screen=DefaultScreen(dis);
@@ -124,7 +126,7 @@ void window_init(win_size_t width, win_size_t height){
     win=XCreateSimpleWindow(dis,DefaultRootWindow(dis),0,0,	width, height, 5, BlackPixel(dis,screen), WhitePixel(dis, screen));
     XSetStandardProperties(dis,win, WINDOW_TITLE,WINDOW_TITLE,None,NULL,0,NULL);
     
-    XSelectInput(dis, win, ExposureMask|ButtonPressMask|KeyPressMask|KeyReleaseMask|StructureNotifyMask|DestroyNotify);
+    XSelectInput(dis, win, ExposureMask|ButtonPressMask|KeyPressMask|KeyReleaseMask|StructureNotifyMask);
     gc=XCreateGC(dis, win, 0,0);
 
     wm_delete = XInternAtom( dis, "WM_DELETE_WINDOW", 1 );
@@ -189,9 +191,9 @@ static void window_redraw(void){
     }else{
         window_framebuffer_updated = false;
     }
-    
-    XLockDisplay(dis);
     XInitThreads();
+    XLockDisplay(dis);
+    
 
 
 
