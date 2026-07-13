@@ -11,8 +11,15 @@
     #error "PLAYBACK_BUFFER_SIZE is too small! Must be able to store at least 2 frames!"
 #endif
 
-//Change this to 'true' if you want the emulator to lag while it is waiting for more samples to play. This is usually desirable since audio stutters are worse than FPS drops
-#define SOUND_WAIT_FOR_WRITES true
+//Change this to 'true' if you want the audio thread to wait for more samples to play if it runs out. This can reduce audio stutters if you have a low PLAYBACK_BUFFER_SIZE. If set to 'false' it will slightly reduce CPU usage
+#define SOUND_WAIT_FOR_WRITES false
+#define PLAYBACK_ENABLE_MA_RING_BUFFER true
+
+#if !SOUND_WAIT_FOR_WRITES && PLAYBACK_ENABLE_MA_RING_BUFFER
+    #define PLAYBACK_CONSUME_DROPPED_FRAMES true //Helps with syncing audio when using the MA ring buffer and you are not waiting for writes 
+#else
+    #define PLAYBACK_CONSUME_DROPPED_FRAMES false
+#endif
 
 
 

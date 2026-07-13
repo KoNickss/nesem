@@ -38,7 +38,6 @@ all: $(addprefix $(ODIR)/, $(C_FILES:.c=.o)) | $(ODIR)
 
 clean:
 	$(RM) $(OUTFILE)
-	$(RM) miniaudio.h
 	$(RM) $(O_FILES)
 	$(RM) $(ODIR)
 debug:
