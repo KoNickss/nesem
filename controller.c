@@ -198,6 +198,44 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 				break;
 			}
 		break;
+		case GPAD_CON_NINTENDO:
+			switch(gp->model.nintendo){
+				case GPAD_CON_MODEL_NINTENDO_WII_U_PRO_CONTROLLER:
+					const float DEADZONE_STICK = 0.4;
+					const size_t START_MASK = 0b1000000000;
+					const size_t SELECT_MASK = 0b100000000;
+					const size_t A_MASK = 0b1;
+					const size_t B_MASK = 0b1000;
+					const size_t LSTICK_AXIS = 0;
+
+					const size_t DPAD_DOWN_MASK = 0b1 << 14;
+					const size_t DPAD_UP_MASK = 0b1 << 13;
+					const size_t DPAD_LEFT_MASK = 0b1 << 15;
+					const size_t DPAD_RIGHT_MASK = 0b1 << 16;
+
+
+
+					joypad_set_button(joypad_index, BUTTON_START, gp->buttons & START_MASK);
+					joypad_set_button(joypad_index, BUTTON_SELECT, gp->buttons & SELECT_MASK);
+					joypad_set_button(joypad_index, BUTTON_A, gp->buttons & A_MASK);
+					joypad_set_button(joypad_index, BUTTON_B, gp->buttons & B_MASK);
+
+					bool left_pressed =  (gp->buttons & DPAD_LEFT_MASK) || gp->axis[LSTICK_AXIS].x <= (DEADZONE_STICK * -1.0f);
+					bool right_pressed = (gp->buttons & DPAD_RIGHT_MASK) || gp->axis[LSTICK_AXIS].x >= (DEADZONE_STICK * 1.0f);
+					bool up_pressed =    (gp->buttons & DPAD_UP_MASK) || gp->axis[LSTICK_AXIS].y <= (DEADZONE_STICK * -1.0f);
+					bool down_pressed =  (gp->buttons & DPAD_DOWN_MASK) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
+
+					joypad_set_button(joypad_index, BUTTON_DOWN, down_pressed);
+					joypad_set_button(joypad_index, BUTTON_UP, up_pressed);
+					joypad_set_button(joypad_index, BUTTON_RIGHT, right_pressed);
+					joypad_set_button(joypad_index, BUTTON_LEFT,left_pressed);
+				break;
+				default:
+					PRINT_ERROR("controller", "Unknown Nintendo controller!");
+					_switch_controller_to_keyboard_input(joypad_index);
+				break;
+			}
+		break;
 		default:
 			PRINT_ERROR("controller", "Unknown Brand controller!");
 			_switch_controller_to_keyboard_input(joypad_index);

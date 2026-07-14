@@ -146,8 +146,18 @@ void window_init(win_size_t width, win_size_t height){
     //Check for controllers
     gpad_device_list_t controller_list = gpad_list_devices();
     gpad_device_list_ent_t* plugged_in_controller =  *((gpad_device_list_ent_t**)controller_list);
+
     if(plugged_in_controller != NULL){
-        printf("\"%s\" plugged into controller port #1\n", plugged_in_controller->name);
+        puts("List of controllers available...");
+        int dev_index = 0;
+        gpad_device_list_ent_t** cursor = (gpad_device_list_ent_t**)controller_list;
+        while(*cursor != NULL){
+            printf("%i:\t%s\n", dev_index, (*cursor)->name);
+            dev_index++;
+            cursor++;
+        }
+
+        printf("\"%s\" with device index 0 plugged into controller port #1\n", plugged_in_controller->name);
         joypad_plug_in_contoller(JOYPAD_1, CONTROLLER_MODE_CONTROLLER, plugged_in_controller);
     }else{
         joypad_plug_in_contoller(JOYPAD_1, CONTROLLER_MODE_KEYBOARD, plugged_in_controller);
