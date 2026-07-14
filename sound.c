@@ -7,6 +7,8 @@
 
 #define PLAYBACK_AUDIO_FORMAT ma_format_f32
 
+static bool audio_system_initalized = false;
+
 
 #if __has_attribute(aligned)
     #define playback_sound_engine_align(a_value) __attribute__((aligned(a_value)))
@@ -25,6 +27,7 @@ typedef struct playback_sound_engine_align(64) {
     pthread_cond_t cond_not_empty;
     pthread_cond_t cond_not_full;
     bool connected;
+    bool initalized;
 }playback_channel_t;
 
 #define PLAYBACK_CHANNEL_INITIALIZER     {\
@@ -33,7 +36,8 @@ typedef struct playback_sound_engine_align(64) {
         .cond_not_full = PTHREAD_COND_INITIALIZER, \
         .cond_not_empty = PTHREAD_COND_INITIALIZER, \
         .connected = false, \
-        .frames_dropped = 0 \
+        .frames_dropped = 0, \
+        .initalized = false\
     }
 #else
 typedef struct playback_sound_engine_align(64) {
@@ -45,6 +49,7 @@ typedef struct playback_sound_engine_align(64) {
     pthread_cond_t cond_not_empty;
     pthread_cond_t cond_not_full;
     bool connected;
+    bool initalized;
 }playback_channel_t;
 
 #define PLAYBACK_CHANNEL_INITIALIZER     {\
@@ -54,7 +59,8 @@ typedef struct playback_sound_engine_align(64) {
         .mutex = PTHREAD_MUTEX_INITIALIZER, \
         .cond_not_full = PTHREAD_COND_INITIALIZER, \
         .cond_not_empty = PTHREAD_COND_INITIALIZER, \
-        .connected = false \
+        .connected = false, \
+        .initalized = false \
     }
 #endif
 
@@ -68,8 +74,12 @@ playback_channel_t playback_channels[] = {
 #define PLAYBACK_CHANNELS_COUNT (sizeof(playback_channels)/sizeof(playback_channel_t))
 
 static bool playback_init_channel(playback_channel_t* chan){
-    if(chan == NULL){
-        DERROR("The channel is NULL!");
+    if(chan == NULL || (audio_system_initalized == false)){
+        DERROR("The channel is NULL or audio system is off!");
+        return false;
+    }
+    if(chan->initalized){
+        DERROR("Could not create channel! Channel is already active!");
         return false;
     }
 
@@ -102,6 +112,7 @@ static bool playback_init_channel(playback_channel_t* chan){
         DERROR("Could not create the pthread cond for 'not_full' %lu", chan - playback_channels);
         return false;
     }
+    chan->initalized = true;
     return true;
 }
 
@@ -133,6 +144,9 @@ void playback_channel_set_volume(size_t channel_id, float volume){
 
 
 static size_t playback_channel_get_frames_available(playback_channel_t* chan){
+    if(chan->initalized == false){
+        return 0;
+    }
     #if PLAYBACK_ENABLE_MA_RING_BUFFER
         return ma_pcm_rb_available_read(&chan->buffer);
     #else
@@ -173,7 +187,7 @@ static size_t playback_channel_read_frames(playback_channel_t* chan, float* dest
     SMART_ASSERT(dest != NULL, "Invalid dest buffer!");
     SMART_ASSERT(chan != NULL, "Invalid playback channel!");
 
-    if(num_frames == 0){
+    if(num_frames == 0 || (audio_system_initalized == false) || (chan->initalized == false)){
         return 0;
     }
 
@@ -385,7 +399,7 @@ static size_t playback_channel_write_floats(size_t channel_id, const float* src,
 }
 
 size_t playback_channel_write_frames(size_t channel_id, const float* src, size_t num_frames){
-    if(num_frames == 0){
+    if(num_frames == 0 || (audio_system_initalized == false) || (playback_channels[channel_id].initalized == false)){
         return 0;
     }
     SMART_ASSERT(src != NULL, "Invalid src buffer!");
@@ -463,9 +477,20 @@ size_t playback_channel_write_frames(size_t channel_id, const float* src, size_t
 
 static void playback_channel_destroy(playback_channel_t* chan){
     SMART_ASSERT(chan != NULL, "Channel was NULL!");
-    pthread_mutex_destroy(&chan->mutex);
+    if(chan->initalized == false){
+        DWARN("Attempting to destroy a channel that is already destroyed");
+        return;
+    }
+    playback_channel_set_enable_state(chan - playback_channels, false);
+    
+    pthread_mutex_lock(&chan->mutex);
     pthread_cond_destroy(&chan->cond_not_empty);
     pthread_cond_destroy(&chan->cond_not_full);
+    chan->initalized = false;
+    pthread_mutex_unlock(&chan->mutex);
+
+    pthread_mutex_destroy(&chan->mutex);
+    
 
     #if PLAYBACK_ENABLE_MA_RING_BUFFER
         ma_pcm_rb_uninit(&chan->buffer);
@@ -580,7 +605,7 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
             float volume = 0.0f;
             ma_uint64 totalFramesRead = frameCount - frames_remaining[i];
             
-            if(playback_channels[i].connected == false){
+            if(playback_channels[i].connected == false || playback_channels[i].initalized == false){
                 continue;
             }
             
@@ -602,9 +627,9 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
                         float fade_step = 1.0f/((float)framesToRead);
                         float* last_good_frame = &((float*)pOutput)[(totalFramesRead == 0) ? 0 : ((totalFramesRead-1)*CHANNEL_COUNT)];
                         for(int iFrame = 0; iFrame < framesToRead; iFrame++){
+                            fade_volume -= fade_step;
                             _data_callback_fbuffer[iFrame*CHANNEL_COUNT + 0] = last_good_frame[0] * fade_volume; 
                             _data_callback_fbuffer[iFrame*CHANNEL_COUNT + 1] = last_good_frame[1] * fade_volume; 
-                            fade_volume -= fade_step;
                         }
                         
                         pthread_mutex_lock(&playback_channels[i].mutex);
@@ -655,6 +680,7 @@ void* audio_thread(void* args){
     }
     if(f == NULL){
         playback_channel_set_enable_state(channel_id, false);
+        playback_channel_destroy(&playback_channels[channel_id]);
         PRINT_ERROR("audio_test", "Could not open test file");
         return NULL;
     }
@@ -687,6 +713,10 @@ void* audio_thread(void* args){
 
 static ma_device _audio_device;
 bool playback_start_audio_engine(void){
+    //Make sure audio engine is not running
+    playback_destroy_audio_engine();
+
+    audio_system_initalized = true;
 
     for(size_t i = 0; i < PLAYBACK_CHANNELS_COUNT; i++){
         playback_init_channel(&playback_channels[i]);
@@ -704,14 +734,22 @@ bool playback_start_audio_engine(void){
 
     if (ma_device_init(NULL, &deviceConfig, &_audio_device) != MA_SUCCESS) {
         PRINT_ERROR("audio", "Failed to open playback device.\n");
+        audio_system_initalized = false;
+        for(size_t i = 0; i < PLAYBACK_CHANNELS_COUNT; i++){
+            playback_channel_destroy(&playback_channels[i]);
+        }
         return false;
     }
 
     if (ma_device_start(&_audio_device) != MA_SUCCESS) {
         PRINT_ERROR("audio", "Failed to start playback device.\n");
-        ma_device_uninit(&_audio_device);
+        playback_destroy_audio_engine();
         return false;
     }
+
+
+    
+
 
     #if ENABLE_AUDIO_TESTER == true
     pthread_t th;
@@ -723,14 +761,21 @@ bool playback_start_audio_engine(void){
     pthread_create(&th, NULL, audio_thread, c1);
     #endif
 
+    
+
     return true;
 }
 
 
 void playback_destroy_audio_engine(void){
-    for(size_t i = 0; i < PLAYBACK_CHANNELS_COUNT; i++){
-        playback_channel_destroy(playback_channel_get(i));
-    }
+    if(audio_system_initalized){
+        for(size_t i = 0; i < PLAYBACK_CHANNELS_COUNT; i++){
+            if(playback_channel_get(i)->initalized){
+                playback_channel_destroy(playback_channel_get(i));
+            }
+        }
 
-    ma_device_uninit(&_audio_device);
+        ma_device_uninit(&_audio_device);
+        audio_system_initalized = false;
+    }
 }

@@ -21,6 +21,9 @@
     #define PLAYBACK_CONSUME_DROPPED_FRAMES false
 #endif
 
+typedef void** playback_device_list_t;
+
+
 
 
 

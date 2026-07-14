@@ -273,6 +273,7 @@ void joypad_disconnect(JOYPAD_t joypad_index){
 		case CONTROLLER_MODE_CONTROLLER:
 			gpad_t_free(&jp[joypad_index].controller_obj);
 		break;
+		case CONTROLLER_MODE_KEYBOARD:
 		case CONTROLLER_MODE____INVALID:
 		break;
 		default:

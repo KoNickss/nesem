@@ -278,10 +278,10 @@ static void window_handle_key(bool key_pressed, byte keycode){
 			joypad_set_button(JOYPAD_1, BUTTON_RIGHT, key_pressed);
 		break;
 		case ',':
-			joypad_set_button(JOYPAD_1, BUTTON_A, key_pressed);
+			joypad_set_button(JOYPAD_1, BUTTON_B, key_pressed);
 		break;
 		case '.':
-			joypad_set_button(JOYPAD_1, BUTTON_B, key_pressed);
+			joypad_set_button(JOYPAD_1, BUTTON_A, key_pressed);
 		break;
 		case '\'':
 			joypad_set_button(JOYPAD_1, BUTTON_START, key_pressed);
