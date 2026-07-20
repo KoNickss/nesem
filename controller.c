@@ -129,28 +129,44 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 		return;
 	}
 
+	float DEADZONE_STICK = 0.4;
+	word START_MASK = 0b1000000000;
+	word SELECT_MASK = 0b100000000;
+	word A_MASK = 0b1;
+	word B_MASK = 0b1000;
+	word DPAD_AXIS = 3;
+	word LSTICK_AXIS = 0;
+	size_t DPAD_DOWN_MASK = 0;
+	size_t DPAD_UP_MASK = 0;
+	size_t DPAD_LEFT_MASK = 0;
+	size_t DPAD_RIGHT_MASK = 0;
+	bool left_pressed = false;
+	bool right_pressed = false;
+	bool up_pressed = false;
+	bool down_pressed = false;
+
 	//Gpad is in valid state
 	switch(gp->brand){
 		case GPAD_CON_SONY:
 			switch(gp->model.sony){
 				case GPAD_CON_MODEL_SONY_PS5:
-					const float DEADZONE_STICK = 0.4;
-					const word START_MASK = 0b1000000000;
-					const word SELECT_MASK = 0b100000000;
-					const word A_MASK = 0b1;
-					const word B_MASK = 0b1000;
-					const word DPAD_AXIS = 3;
-					const word LSTICK_AXIS = 0;
+					DEADZONE_STICK = 0.4;
+					START_MASK = 0b1000000000;
+					SELECT_MASK = 0b100000000;
+					A_MASK = 0b1;
+					B_MASK = 0b1000;
+					DPAD_AXIS = 3;
+					LSTICK_AXIS = 0;
 
 					joypad_set_button(joypad_index, BUTTON_START, gp->buttons & START_MASK);
 					joypad_set_button(joypad_index, BUTTON_SELECT, gp->buttons & SELECT_MASK);
 					joypad_set_button(joypad_index, BUTTON_A, gp->buttons & A_MASK);
 					joypad_set_button(joypad_index, BUTTON_B, gp->buttons & B_MASK);
 
-					bool left_pressed = gp->axis[DPAD_AXIS].x <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].x <= (DEADZONE_STICK * -1.0f);
-					bool right_pressed = gp->axis[DPAD_AXIS].x >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].x >= (DEADZONE_STICK * 1.0f);
-					bool up_pressed = gp->axis[DPAD_AXIS].y <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].y <= (DEADZONE_STICK * -1.0f);
-					bool down_pressed = gp->axis[DPAD_AXIS].y >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
+					left_pressed = gp->axis[DPAD_AXIS].x <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].x <= (DEADZONE_STICK * -1.0f);
+					right_pressed = gp->axis[DPAD_AXIS].x >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].x >= (DEADZONE_STICK * 1.0f);
+					up_pressed = gp->axis[DPAD_AXIS].y <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].y <= (DEADZONE_STICK * -1.0f);
+					down_pressed = gp->axis[DPAD_AXIS].y >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
 
 					joypad_set_button(joypad_index, BUTTON_DOWN, down_pressed);
 					joypad_set_button(joypad_index, BUTTON_UP, up_pressed);
@@ -169,23 +185,23 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 		case GPAD_CON_XBOX:
 			switch(gp->model.xbox){
 				case GPAD_CON_MODEL_XBOX_360:
-					const float DEADZONE_STICK = 0.4;
-					const word START_MASK = 0b10000000;
-					const word SELECT_MASK = 0b1000000;
-					const word A_MASK = 0b1;
-					const word B_MASK = 0b100;
-					const word DPAD_AXIS = 3;
-					const word LSTICK_AXIS = 0;
+					DEADZONE_STICK = 0.4;
+					START_MASK = 0b10000000;
+					SELECT_MASK = 0b1000000;
+					A_MASK = 0b1;
+					B_MASK = 0b100;
+					DPAD_AXIS = 3;
+					LSTICK_AXIS = 0;
 
 					joypad_set_button(joypad_index, BUTTON_START, gp->buttons & START_MASK);
 					joypad_set_button(joypad_index, BUTTON_SELECT, gp->buttons & SELECT_MASK);
 					joypad_set_button(joypad_index, BUTTON_A, gp->buttons & A_MASK);
 					joypad_set_button(joypad_index, BUTTON_B, gp->buttons & B_MASK);
 
-					bool left_pressed = gp->axis[DPAD_AXIS].x <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].x <= (DEADZONE_STICK * -1.0f);
-					bool right_pressed = gp->axis[DPAD_AXIS].x >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].x >= (DEADZONE_STICK * 1.0f);
-					bool up_pressed = gp->axis[DPAD_AXIS].y <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].y <= (DEADZONE_STICK * -1.0f);
-					bool down_pressed = gp->axis[DPAD_AXIS].y >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
+					left_pressed = gp->axis[DPAD_AXIS].x <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].x <= (DEADZONE_STICK * -1.0f);
+					right_pressed = gp->axis[DPAD_AXIS].x >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].x >= (DEADZONE_STICK * 1.0f);
+					up_pressed = gp->axis[DPAD_AXIS].y <= (DEADZONE_STICK * -1.0f) || gp->axis[LSTICK_AXIS].y <= (DEADZONE_STICK * -1.0f);
+					down_pressed = gp->axis[DPAD_AXIS].y >= (DEADZONE_STICK * 1.0f) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
 
 					joypad_set_button(joypad_index, BUTTON_DOWN, down_pressed);
 					joypad_set_button(joypad_index, BUTTON_UP, up_pressed);
@@ -201,17 +217,17 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 		case GPAD_CON_NINTENDO:
 			switch(gp->model.nintendo){
 				case GPAD_CON_MODEL_NINTENDO_WII_U_PRO_CONTROLLER:
-					const float DEADZONE_STICK = 0.4;
-					const size_t START_MASK = 0b1000000000;
-					const size_t SELECT_MASK = 0b100000000;
-					const size_t A_MASK = 0b1;
-					const size_t B_MASK = 0b1000;
-					const size_t LSTICK_AXIS = 0;
+					DEADZONE_STICK = 0.4;
+					START_MASK = 0b1000000000;
+					SELECT_MASK = 0b100000000;
+					A_MASK = 0b1;
+					B_MASK = 0b1000;
+					LSTICK_AXIS = 0;
 
-					const size_t DPAD_DOWN_MASK = 0b1 << 14;
-					const size_t DPAD_UP_MASK = 0b1 << 13;
-					const size_t DPAD_LEFT_MASK = 0b1 << 15;
-					const size_t DPAD_RIGHT_MASK = 0b1 << 16;
+					DPAD_DOWN_MASK = 0b1 << 14;
+					DPAD_UP_MASK = 0b1 << 13;
+					DPAD_LEFT_MASK = 0b1 << 15;
+					DPAD_RIGHT_MASK = 0b1 << 16;
 
 
 
@@ -220,15 +236,44 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 					joypad_set_button(joypad_index, BUTTON_A, gp->buttons & A_MASK);
 					joypad_set_button(joypad_index, BUTTON_B, gp->buttons & B_MASK);
 
-					bool left_pressed =  (gp->buttons & DPAD_LEFT_MASK) || gp->axis[LSTICK_AXIS].x <= (DEADZONE_STICK * -1.0f);
-					bool right_pressed = (gp->buttons & DPAD_RIGHT_MASK) || gp->axis[LSTICK_AXIS].x >= (DEADZONE_STICK * 1.0f);
-					bool up_pressed =    (gp->buttons & DPAD_UP_MASK) || gp->axis[LSTICK_AXIS].y <= (DEADZONE_STICK * -1.0f);
-					bool down_pressed =  (gp->buttons & DPAD_DOWN_MASK) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
+					left_pressed =  (gp->buttons & DPAD_LEFT_MASK) || gp->axis[LSTICK_AXIS].x <= (DEADZONE_STICK * -1.0f);
+					right_pressed = (gp->buttons & DPAD_RIGHT_MASK) || gp->axis[LSTICK_AXIS].x >= (DEADZONE_STICK * 1.0f);
+					up_pressed =    (gp->buttons & DPAD_UP_MASK) || gp->axis[LSTICK_AXIS].y <= (DEADZONE_STICK * -1.0f);
+					down_pressed =  (gp->buttons & DPAD_DOWN_MASK) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
 
 					joypad_set_button(joypad_index, BUTTON_DOWN, down_pressed);
 					joypad_set_button(joypad_index, BUTTON_UP, up_pressed);
 					joypad_set_button(joypad_index, BUTTON_RIGHT, right_pressed);
 					joypad_set_button(joypad_index, BUTTON_LEFT,left_pressed);
+				break;
+				case GPAD_CON_MODEL_NINTENDO_WII_MOTE:
+					START_MASK = 0b1 << (8);
+					SELECT_MASK = 0b1 << (9);
+					A_MASK = (0b1 << (6)) | (0b1 << (5));
+					B_MASK = (0b1 << (7)) | (0b1 << (4));
+
+					DPAD_DOWN_MASK = 0b1 << (1);
+					DPAD_UP_MASK = 0b1;
+					DPAD_LEFT_MASK = 0b1 << (2);
+					DPAD_RIGHT_MASK = 0b1 << (3);
+
+
+
+					joypad_set_button(joypad_index, BUTTON_START, gp->buttons & START_MASK);
+					joypad_set_button(joypad_index, BUTTON_SELECT, gp->buttons & SELECT_MASK);
+					joypad_set_button(joypad_index, BUTTON_A, gp->buttons & A_MASK);
+					joypad_set_button(joypad_index, BUTTON_B, gp->buttons & B_MASK);
+
+					left_pressed =  (gp->buttons & DPAD_LEFT_MASK);
+					right_pressed = (gp->buttons & DPAD_RIGHT_MASK);
+					up_pressed =    (gp->buttons & DPAD_UP_MASK);
+					down_pressed =  (gp->buttons & DPAD_DOWN_MASK);
+
+					joypad_set_button(joypad_index, BUTTON_DOWN, down_pressed);
+					joypad_set_button(joypad_index, BUTTON_UP, up_pressed);
+					joypad_set_button(joypad_index, BUTTON_RIGHT, right_pressed);
+					joypad_set_button(joypad_index, BUTTON_LEFT,left_pressed);
+
 				break;
 				default:
 					PRINT_ERROR("controller", "Unknown Nintendo controller!");

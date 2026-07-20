@@ -18,6 +18,9 @@ typedef unsigned char u8;
 
 typedef struct js_event controller_event;
 
+typedef u32 js_t;
+
+
 #include <pthread.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -26,14 +29,42 @@ typedef struct js_event controller_event;
 #include <dirent.h>
 
 
-
-int gpad_read(gpad_t* gpad){
-	controller_event e;
-
-	if(gpad->fd < 0){
-		return READ_DEAD_CONTROLLER;
+static inline void _smart_close(int fd, const char* _func, const char* _file, size_t _line){
+	if(close(fd) != 0){
+		PRINT_ERROR("gpad", "Could not close fd=%i in func \"%s\" in file \"%s\" on line %lu! ", fd, _func, _file, _line);
+		perror("");
+		abort();
 	}
+}
+#define smart_close(fd) _smart_close(fd, __PRETTY_FUNCTION__, __FILE__, __LINE__)
 
+
+void gpad_t_free(gpad_t* gpad){
+	if(gpad->axis != NULL)
+		free(gpad->axis);
+	if(gpad->name != NULL)
+		free(gpad->name);
+	if(gpad->events != NULL)
+		free(gpad->events);
+	if(gpad->fd >= 0){
+		smart_close(gpad->fd);
+	}
+	memset(gpad, 0, sizeof(gpad_t));
+	gpad->axis_count = 0;
+	gpad->button_count = 0;
+
+	gpad->axis = NULL;
+	gpad->name = NULL;
+	gpad->events = NULL;
+	
+	gpad->fd = -1;
+	gpad->rumble_event = -1;
+	gpad->connection_mode = GPAD_PROTOCOL_MODE_INVALID;
+}
+
+
+static int _gpad_read_joydev(gpad_t* gpad){
+	controller_event e;
 	while(read(gpad->fd, &e, sizeof(e)) > 0){
 		//if(e.type & JS_EVENT_INIT) continue;
 
@@ -60,12 +91,120 @@ int gpad_read(gpad_t* gpad){
 	if(errno != EAGAIN){
 		PRINT_ERROR("controller", "Error reading controller device!");
 		DPERROR("Controller \"%s\" could not be read! reason=", gpad->name);
-		close(gpad->fd);
+		smart_close(gpad->fd);
 		gpad->fd = -1;
 		return READ_FAILED;
 	}
 
 	return READ_OK;
+}
+
+#include <linux/input-event-codes.h>
+static int _gpad_read_evdev(gpad_t* gpad){
+	struct input_event ev;
+
+	while (read(gpad->fd, &ev, sizeof(ev)) == sizeof(ev)) {
+
+		switch(gpad->brand){
+			case GPAD_CON_NINTENDO:
+				switch(gpad->model.nintendo){
+					case GPAD_CON_MODEL_NINTENDO_WII_MOTE:
+						switch (ev.type) {
+							case 0x0:
+								if(ev.code != 0 || ev.value != 0){
+									DWARN("UNKNOWN COMMAND type=%X code=%X value=%X", ev.type, ev.code, ev.value);
+								}
+							break;
+							case EV_KEY:
+								gpad->button_count = 10;
+
+								ssize_t button_index = -1;
+								switch(ev.code){
+									case 106: //up
+										button_index = 0;
+									break;
+									case 105: //down
+										button_index = 1;
+									break;
+									case 103: //left
+										button_index = 2;
+									break;
+									case 108: //right
+										button_index = 3;
+									break;
+									case 257: //1
+										button_index = 4;
+									break;
+									case 258: //2
+										button_index = 5;
+									break;
+									case 304: //A
+										button_index = 6;
+									break;
+									case 305: //B
+										button_index = 7;
+									break;
+									case 407: //Start
+										button_index = 8;
+									break;
+									case 412: //Minus
+										button_index = 9;
+									break;
+									default:
+										DERROR("Unknown wiimote key command %X", ev.code);
+									break;
+								}
+
+								//Set the proper bit
+								if (ev.value){
+									gpad->buttons |= (1u << button_index);
+								}else{
+									gpad->buttons &= ~(1u << button_index);
+								}
+
+
+							break;
+							default:
+								DERROR("UNKNOW EVDEV COMMAND %X:%X:%X", ev.type, ev.code, ev.value);
+							break;
+						}
+					break;
+					default:
+						DERROR("Not a mapped Nintendo controller (controller model = %u)!", gpad->model.nintendo);
+						return READ_FAILED;
+					break;
+				};
+			break;
+			default:
+				DERROR("Not a mapped controller (brrand = %u, model = %u)!", gpad->brand, gpad->model.nintendo);
+				return READ_FAILED;
+			break;
+		};
+	}
+
+	return READ_OK;
+}
+
+int gpad_read(gpad_t* gpad){
+
+	if(gpad->fd < 0){
+		return READ_DEAD_CONTROLLER;
+	}
+
+	switch((unsigned int)gpad->connection_mode){
+		case GPAD_PROTOCOL_MODE_JOYDEV:
+			return _gpad_read_joydev(gpad);
+		break;
+		case GPAD_PROTOCOL_MODE_EVDEV:
+			return _gpad_read_evdev(gpad);
+		break;
+		default:
+			DERROR("Invalid controller protocol %u!", (unsigned int)gpad->connection_mode);
+			return READ_FAILED;
+		break;
+	}
+
+	return READ_FAILED;
 }
 
 
@@ -75,11 +214,11 @@ typedef struct{
 }vendor_data_t;
 
 
-static u_int16_t _get_uint16_file(const char file_path[], int js){
+static u_int16_t _get_uint16_file(const char file_path[], js_t js){
 	const char* buf2 = file_path;
 	FILE* f = fopen(buf2, "r");
 	if(f == NULL){
-		DPERROR("Could not open VENDOR ID for controller %i  ", js);
+		DPERROR("Could not open VENDOR ID for controller %u  ", js);
 		return 0;
 	}
 	char name[5] = "    ";
@@ -94,7 +233,7 @@ static u_int16_t _get_uint16_file(const char file_path[], int js){
 }
 
 
-static int get_events(int js, int events[], int events_len){
+static int get_events(js_t js, event_t events[], int events_len){
 	if(events_len <= 0){
 		return -1;
 	}
@@ -117,8 +256,9 @@ static int get_events(int js, int events[], int events_len){
 
     // Look for eventX inside js0 device directory
     while ((entry = readdir(dir))) {
-        if (strncmp(entry->d_name, "event", 5) == 0) {
-			a = sscanf(entry->d_name + strlen("event"), "%u", &events[real_event_len++]);
+        if (strncmp(entry->d_name, "event", strlen("event")) == 0) {
+			a = sscanf(entry->d_name + strlen("event"), "%lli", &events[real_event_len++]);
+			printf("Discovered event %s\n", entry->d_name);
 			if(a < 1){
 				return -1;
 			}
@@ -170,7 +310,7 @@ static int has_ff_rumble(int fd)
 }
 
 
-static vendor_data_t _get_vendor_data(int js){
+static vendor_data_t _get_vendor_data(js_t js){
 
 	#define ENABLE_HIDRAW false //Requires root
 	#define GET_VENDOR_INFO_FROM_HW_DEVICE false //Gets the vendor id from the interface. This is bad if you are using bluetooth because this gets the vendor info for the bluetooth device
@@ -286,7 +426,7 @@ static vendor_data_t _get_vendor_data(int js){
 				int res = ioctl(fd, HIDIOCGRDESCSIZE, &descriptor_size);
 				if(res < 0){
 					DPERROR("Could not get descriptor size from fd %i for path \"%s\" ", fd, buf2);
-					close(fd);
+					smart_close(fd);
 					return dat;
 				}
 
@@ -304,13 +444,13 @@ static vendor_data_t _get_vendor_data(int js){
 
 					dat.vendor_id = info.vendor;
 					dat.product_id = info.product;
-					close(fd);
+					smart_close(fd);
 					closedir(d);
 					return dat;
 				}
 
 
-				close(fd);
+				smart_close(fd);
 			}
 
 			closedir(d);
@@ -523,9 +663,57 @@ static GPAD_CON_MODEL_XBOX_T _get_xbox_product(const vendor_data_t* vend){
 }
 
 
+static inline GPAD_PROTOCOL_MODE_T _get_protocol_mode(const gpad_t* gpad){
+	switch(gpad->brand){
+		case GPAD_CON_NINTENDO:
+			switch(gpad->model.nintendo){
+				case GPAD_CON_MODEL_NINTENDO_WII_MOTE:
+					return GPAD_PROTOCOL_MODE_EVDEV;
+				break;
+				case GPAD_CON_MODEL_NINTENDO_WII_U_PRO_CONTROLLER:
+					return GPAD_PROTOCOL_MODE_JOYDEV;
+				break;
+				default:
+					DERROR("Invalid controller nintendo model %u", gpad->model.nintendo);
+					abort();
+				break;
+			};
+		break;
+		case GPAD_CON_SONY:
+			switch(gpad->model.sony){
+				case GPAD_CON_MODEL_SONY_PS5:
+					return GPAD_PROTOCOL_MODE_JOYDEV;
+				break;
+				default:
+					DERROR("Invalid controller sony model %u", gpad->model.nintendo);
+					abort();
+				break;
+			};
+		break;
+		case GPAD_CON_XBOX:
+			switch(gpad->model.xbox){
+				case GPAD_CON_MODEL_XBOX_360:
+					return GPAD_PROTOCOL_MODE_JOYDEV;
+				break;
+				default:
+					DERROR("Invalid controller xbox model %u", gpad->model.nintendo);
+					abort();
+				break;
+			};
+		break;
+		default:
+			DERROR("No valid protocol!");
+			return GPAD_PROTOCOL_MODE_INVALID;
+		break;
+	}
+
+	DERROR("Could not find a valid protocol");
+	return GPAD_PROTOCOL_MODE_INVALID;
+}
+
 
 #define NAME_SIZE 512
-bool gpad_t_construct(gpad_t* gpad, unsigned int js){
+bool gpad_t_construct(gpad_t* gpad, js_t js){
 	char* device_path_buffer = (char*)alloca(PATH_MAX);
 	gpad->axis = NULL;
 	gpad->fd=-1;
@@ -538,27 +726,32 @@ bool gpad_t_construct(gpad_t* gpad, unsigned int js){
 
 
 	//Search for events
-	int events[10];
-	int real_event_len = get_events(js, events, sizeof(events)/sizeof(int));
+	#define GPAD_MAX_ALLOWED_EVENTS (20)
+	event_t* event_buffer = xmalloc(GPAD_MAX_ALLOWED_EVENTS * sizeof(event_t));
+	gpad->events = event_buffer;
+	memset(event_buffer, -1, GPAD_MAX_ALLOWED_EVENTS * sizeof(event_t));
+	gpad->rumble_event = -1;
+	int real_event_len = get_events(js, event_buffer, GPAD_MAX_ALLOWED_EVENTS-1);
 	if(real_event_len < 0){
 		DERROR("Could not read events associated with controller js=%i", js);
+		gpad_t_free(gpad);
 		return false;
 	}
 	for(int i = 0; i < real_event_len; i++){
-		snprintf(device_path_buffer, PATH_MAX, "/dev/input/event%i", events[i]);
+		snprintf(device_path_buffer, PATH_MAX, "/dev/input/event%lli", gpad->events[i]);
 		int fd = open(device_path_buffer, O_RDONLY);
 		if(fd <= 0){
-			DWARN("Could not read event %i for js=%i", events[i], js);
+			DWARN("Could not read event %lli for js=%i", gpad->events[i], js);
 			continue;;
 		}
 		if(!has_ff_rumble(fd)){
-			close(fd);
+			smart_close(fd);
 			continue;
 		}
-		close(fd);
+		smart_close(fd);
 		fd = -1;
 
-		gpad->rumble_event = events[i];
+		gpad->rumble_event = gpad->events[i];
 		break;
 	}
 
@@ -572,17 +765,13 @@ bool gpad_t_construct(gpad_t* gpad, unsigned int js){
 	if(gpad->fd <= 0){
 		gpad->fd = open(device_path_buffer, O_NONBLOCK | O_RDONLY);
 		if(gpad->fd <= 0){
-			gpad->axis = NULL;
-			gpad->fd=-1;
-			gpad->name=NULL;
+			gpad_t_free(gpad);
 			DPERROR("Could not open \"%s\" for reading. ", device_path_buffer);
 			return false;
 		}
 	}else{
 		DERROR("Could not open \"%s\" for reading. The FD for this gamepad is already initalized!", device_path_buffer);
-		gpad->axis = NULL;
-		gpad->fd=-1;
-		gpad->name=NULL;
+		gpad_t_free(gpad);
 		return false;
 	}
 
@@ -623,43 +812,74 @@ bool gpad_t_construct(gpad_t* gpad, unsigned int js){
 		break;
 	}
 
+	gpad->connection_mode = _get_protocol_mode(gpad);
 
-	//Get number of axises
-	char number_of_axes;
-	int ret_val = ioctl (gpad->fd, JSIOCGAXES, &number_of_axes);
+	char number_of_axes = -1;
+	char number_of_buttons = -1;
+	int ret_val = -1;
+	switch(gpad->connection_mode){
+		case GPAD_PROTOCOL_MODE_JOYDEV:
+			//Get number of axises
+			ret_val = ioctl (gpad->fd, JSIOCGAXES, &number_of_axes);
 
-	if(number_of_axes <= 0 || ret_val < 0){
-		DWARN("Number of sticks are less than 0! Assuming this is a non-analog controller");
-		number_of_axes = 0;
+			if(number_of_axes <= 0 || ret_val < 0){
+				DWARN("Number of sticks are less than 0! Assuming this is a non-analog controller");
+				number_of_axes = 0;
+			}
+
+			if(number_of_axes > 0){
+				gpad->axis_count = number_of_axes;
+				gpad->axis = (gpad_axis_t*)xmalloc(sizeof(gpad_axis_t) * gpad->axis_count);
+				for(size_t i = 0; i < gpad->axis_count; i++){
+					gpad->axis[i].x = 0;
+					gpad->axis[i].y = 0;
+				}
+			}else{
+				gpad->axis_count = 0;
+				gpad->axis = NULL;
+			}
+
+			//get button count
+			ret_val = ioctl (gpad->fd, JSIOCGBUTTONS, &number_of_buttons);
+			if(ret_val < 0){
+				DPERROR("Could not ictl for button count. ");
+				number_of_buttons = 0;
+			}
+
+			if(number_of_buttons <= 0 || ret_val < 0){
+				DWARN("Number of buttons are less than 0! Assuming this is an analog-only controller\n");
+				number_of_buttons = 0;
+			}
+
+			gpad->button_count = number_of_buttons;
+			gpad->buttons = 0;
+
+		break;
+		case GPAD_PROTOCOL_MODE_EVDEV:
+			SMART_ASSERT(real_event_len > 0, "No events to read for evdev controller js=%u", js);
+			SMART_ASSERT(gpad->fd >= 0, "JS was already closed!");
+			smart_close(gpad->fd);
+			gpad->fd = -1;
+			sprintf(device_path_buffer, "/dev/input/event%lli", gpad->events[0]);
+
+			PRINT_INFO("gpad", "Reading event %lli", gpad->events[0]);
+			gpad->fd = open(device_path_buffer, O_NONBLOCK | O_RDONLY);
+			if(gpad->fd <= 0){
+				gpad_t_free(gpad);
+				DPERROR("Could not open \"%s\" for reading. ", device_path_buffer);
+				return false;
+			}
+
+
+
+			
+		break;
+		default:
+			DERROR("Unknown protocol %u", gpad->connection_mode);
+			gpad_t_free(gpad);
+			return false;
+		break;
 	}
-
-	if(number_of_axes > 0){
-		gpad->axis_count = number_of_axes;
-		gpad->axis = (gpad_axis_t*)xmalloc(sizeof(gpad_axis_t) * gpad->axis_count);
-		for(size_t i = 0; i < gpad->axis_count; i++){
-			gpad->axis[i].x = 0;
-			gpad->axis[i].y = 0;
-		}
-	}else{
-		gpad->axis_count = 0;
-		gpad->axis = NULL;
-	}
-
-	//get button count
-	char number_of_buttons;
-	ret_val = ioctl (gpad->fd, JSIOCGBUTTONS, &number_of_buttons);
-	if(ret_val < 0){
-		DPERROR("Could not ictl for button count. ");
-		number_of_buttons = 0;
-	}
-
-	if(number_of_buttons <= 0 || ret_val < 0){
-		DWARN("Number of buttons are less than 0! Assuming this is an analog-only controller\n");
-		number_of_buttons = 0;
-	}
-
-	gpad->button_count = number_of_buttons;
-	gpad->buttons = 0;
 
 
 
@@ -793,7 +1013,7 @@ gpad_device_list_t gpad_list_devices(void){
 		int fd = open(device_path_buffer, O_NONBLOCK | O_RDONLY);
 		if (ioctl(fd, JSIOCGNAME(NAME_SIZE), name) < 0)
 			strncpy(name, "Unknown", NAME_SIZE);
-		close(fd);
+		smart_close(fd);
 		
 		//Check if we dont want to list this device
 		if(is_device_list_soft_blacklisted(name)){
@@ -861,17 +1081,4 @@ void gpad_device_list_free(gpad_device_list_t device_list){
 bool gpad_construct_from_device_list_ent(gpad_t* gpad, const gpad_device_list_ent_t* ent){
 	gpad_device_list_ent_real_t* real_ent = (gpad_device_list_ent_real_t*)ent;
 	return gpad_t_construct(gpad, real_ent->data.js);
-}
-
-void gpad_t_free(gpad_t* gpad){
-	if(gpad->axis != NULL)
-		free(gpad->axis);
-	if(gpad->name != NULL)
-		free(gpad->name);
-	gpad->axis = NULL;
-	gpad->name = NULL;
-	if(gpad->fd >= 0){
-		SMART_ASSERT(close(gpad->fd) == 0, "Could not close gamepad");
-	}
-	memset(gpad, 0, sizeof(gpad_t));
 }

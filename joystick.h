@@ -20,7 +20,7 @@ typedef union{
 }gpad_axis_t;
 
 typedef unsigned long gpad_button_t;
-
+typedef long long event_t;
 
 typedef enum{
     GPAD_CON_INVALID,
@@ -58,16 +58,25 @@ typedef union{
 }GPAD_CON_MODEL_T;
 
 
+typedef enum{
+    GPAD_PROTOCOL_MODE_INVALID,
+    GPAD_PROTOCOL_MODE_JOYDEV,
+    GPAD_PROTOCOL_MODE_EVDEV,
+    GPAD_PROTOCOL_MODE_UNINIT
+}GPAD_PROTOCOL_MODE_T;
+
 typedef struct{
     int fd;
     gpad_axis_t* axis;
-    int rumble_event;
+    event_t rumble_event;
+    event_t* events;
     char* name;
     gpad_button_t buttons;
     size_t axis_count;
     size_t button_count;
     GPAD_CON_BRAND_T brand;
     GPAD_CON_MODEL_T model;
+    GPAD_PROTOCOL_MODE_T connection_mode;
 }gpad_t;
 
 //void gpad_init();
