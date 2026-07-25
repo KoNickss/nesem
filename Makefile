@@ -28,7 +28,7 @@ default: all
 
 
 
-$(ODIR)/%.o : %.c miniaudio.h
+$(ODIR)/%.o : %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $*.c
 
@@ -45,9 +45,6 @@ debug:
 
 debug-tickonclick:
 	@$(MAKE) all TICK_ON_KEY=true DEBUG=true --no-print-directory
-
-miniaudio.h:
-	curl -L -O https://raw.githubusercontent.com/mackron/miniaudio/refs/heads/master/miniaudio.h
 
 $(ODIR):
 	@mkdir -p $@

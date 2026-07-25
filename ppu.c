@@ -17,7 +17,6 @@ static void* ppuThread(void* args);
 #define PPU_BUS_SIZE (0x3FFF)
 static byte ppuBus[2 + PPU_BUS_SIZE];
 
-PPU ppu;
 
 static inline word resolveNameTableAddress(word regData){
     return (regData & 0b0000111111111111) | (1 << (14 - 1));
@@ -25,6 +24,7 @@ static inline word resolveNameTableAddress(word regData){
 
 bool verticalMirroring;
 
+PPU ppu;
 
 
 /*
@@ -79,6 +79,12 @@ fixed
 //BUS ENGINE FUNCTIONS
 //
 // ----
+
+void ppuSwallowOAMDMA(int page[256]){
+    for(int i = 0; i < 256; ++i){
+        ppu.ppuOAM.data[i] = page[i];
+    }
+}
 
 static byte ppuRead(word address){
 
@@ -173,9 +179,15 @@ void ppuRegWrite(word address, byte data){
 
         case 3: //oamAddress
 
+            ppu.ppuOAM.address = data;
+
         break;
 
         case 4: //oamData
+
+            byte oamAddr = ppu.ppuOAM.address;
+            ppu.ppuOAM.data[oamAddr] = data;
+            ++ppu.ppuOAM.address;
 
         break;
 
@@ -268,11 +280,14 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
 
         case 3: //oamAddress
 
+            return ppu.ppuOAM.address;
 
         break;
 
         case 4: //oamData
 
+            byte oamAddr = ppu.ppuOAM.address;
+            return ppu.ppuOAM.data[oamAddr];
 
         break;
 
@@ -454,10 +469,12 @@ void initPpu(){
     ppu.PALCOL[0x3E] = 0xFF000000;
     ppu.PALCOL[0x3F] = 0xFF000000;
 
-
+    for(int i = 0; i < 256; ++i){
+        ppu.ppuOAM.data[i] = 0;
+    }
 
     sterlize_ppu();
-    
+
     window_init(SCREEN_WIDTH * PIXEL_SIZE, SCREEN_HEIGHT * PIXEL_SIZE);
 
     //pthread_create(&ppuThread_id, NULL, ppuThread, NULL);
@@ -627,6 +644,11 @@ void ppuClock(CPU* cpu){
     if(scanline >= -1 && scanline <= 239){
         //visible area
 
+        if(cycle >= 257 && cycle <= 320){
+            ppu.ppuOAM.address = 0;
+        } // covers both visible and pre-render scanlines I think
+        // TODO: sanity check
+
         if((cycle >= 1 && cycle <= 257) || (cycle >= 321 && cycle <= 336)){
 
             updateShifters();
@@ -709,7 +731,7 @@ void ppuClock(CPU* cpu){
     byte bgPal = 0;
 
     //FIXME: Is this bugged? Should it be using the new 'ppu.mask.enable*' vars?
-    if(ppu.mask.showBackdropDebug){
+    if(ppu.mask.enableBackgroundRendering){
         word bit_m = 0x8000 >> ppu.xReg; //FIXME: Should we represent this as binary instead or is this an addr?
 
         byte pixelLo = (ppu.bgShift.patternLo & bit_m) > 0;

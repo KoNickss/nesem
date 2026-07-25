@@ -1,12 +1,10 @@
 #include "bus.h"
-#include <string.h>
 #include <time.h>
+#include <string.h>
 #include <unistd.h>
 
 //For displaying to the screen
 #include "window.h"
-
-bool debug = true;
 
 
 unsigned char bus[BUS_SIZE]; //this is the bus array
@@ -23,35 +21,69 @@ unsigned char bus[BUS_SIZE]; //this is the bus array
 
 #include "window.h"
 
-#define TRANSLATE_PPU_ADDRESS(address) ((address - 0x2000) % 8 + 0x2000)
+#define TRANSLATE_PPU_ADDRESS(address) ((address - PPU_START) % 8 + PPU_START)
+
+int CPU_TIMEOUT_CYCLES = 0;
+
+void performOamDMA(){
+    byte pageID = busRead8(OAM_DMA_ADDR);
+    word startAddr = pageID << 8;
+    word stopAddr = (pageID + 1) << 8;
+
+    int page[256];
+
+    for(int i = 0; i < stopAddr; ++i){
+        byte oamAddr = i & 0x00FF; //LS 8 bits
+        page[oamAddr] = busRead8(i);
+    }
+
+    ppuSwallowOAMDMA(page);
+}
 
 void busWrite8(word address, word data){
-    if(address == 0x4016){
-        if((data & 0b1) == 0b1){
-		    joypad_prepare_read();
-        }else if((data & 0b1) == 0b0){
-            joypad_publish_state();
-        }
-	}
+
     if(!mapper000_Write(address, data, false)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
 
         /*if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
             address %= 0x07FF;*/
 
-        if(0x2000 <= address && address <= 0x3FFF){
+        if(PPU_START <= address && address <= PPU_END){
             address = TRANSLATE_PPU_ADDRESS(address);
             ppuRegWrite(address, data & 0xFF);
             return;
         }
 
-        bus[address] = (unsigned char)data;
+        if(address == JOYPAD1_ADDR){
+            if((data & 0b1) == 0b1){
+		    joypad_prepare_read();
+            }else if((data & 0b1) == 0b0){
+                joypad_publish_state();
+            }
+        }
+
+        if(address == OAM_DMA_ADDR){
+            //STOP!! TRIGGER DIRECT MEMORY ACCESS: copy one entire page of cpu memory to the PPU's OAM (sprite state sheet), as manually doing this usind PPU oam data/addr regs would be slow. Almost all roms but the most primitive use this.
+
+            bus[address] = (byte)data;
+
+            #ifdef DEBUG
+                printf("OAM_DMA!!!!\n");
+            #endif
+
+            performOamDMA(); //because DMAs *usually* happen during vblank, we can get away with an instant copy and just bill the cycle cost to the cpu artificially, but to be 100% accurate we could paint it in as one by one, but that seems useless for the most part
+
+            CPU_TIMEOUT_CYCLES += 514; //bill it to the cpu
+
+            return;
+
+        }
+
+        bus[address] = (byte)data;
     }
 }
 
 word busRead8(word address){
-	if(address == 0x4016){
-		return joypad_read_bit(JOYPAD_1);
-	}
+
     word data;
     if((data = mapper000_Read(address, false)) >= 0x100){ //we first ask the mapper to read the data from the address for us in case its on the cartridge, if it returns 0x100 (0xFF + 1 aka impossible to get from reading a byte) that means the data stored at that address is not on the cartridge, but rather on the nes memory, thus we hand the job over to the bus
 
@@ -60,11 +92,14 @@ word busRead8(word address){
             address %= 0x07FF;*/
 
 
-        if(0x2000 <= address && address <= 0x3FFF){
+        if(PPU_START <= address && address <= PPU_END){
             address = TRANSLATE_PPU_ADDRESS(address);
             return ppuRegRead(address);
         }
 
+        if(address == JOYPAD1_ADDR){
+            return joypad_read_bit(JOYPAD_1);
+        }
 
         return bus[address];
     }else{
@@ -160,11 +195,16 @@ int main(int argc, char * argv[]){
         //
         //
         //RUN THE CPU CLOCK ONE TIME
+
         int cpuCycles = cpuClock(cpu);
+        cpuCycles += CPU_TIMEOUT_CYCLES;
+        CPU_TIMEOUT_CYCLES = 0;
+
         debug_print_instruction(cpu, busRead8(cpu->PC));
 
         for(int i = 0; i < 3 * cpuCycles; ++i)
             ppuClock(cpu);
+
         //
         //
         //

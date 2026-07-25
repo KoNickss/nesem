@@ -16,3 +16,9 @@ void dumpBus();
 #define ROM_VECTOR_NMI 0xFFFA
 #define ROM_VECTOR_RESET 0xFFFC
 #define ROM_VECTOR_IRQ 0xFFFE
+
+#define OAM_DMA_ADDR 0x4014
+#define JOYPAD1_ADDR 0x4016
+
+#define PPU_START 0x2000
+#define PPU_END 0x3FFF

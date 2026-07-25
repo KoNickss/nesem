@@ -31,7 +31,24 @@ typedef struct{
     };
 }locationRegister;
 
+typedef struct __attribute__((packed, aligned(1))){
+    byte y;
+    byte tile;
+    byte attributes;
+    byte x;
+}sprite; // one single unit of sprite state information
 
+typedef struct{
+    union{
+        sprite sprites[64];
+
+        byte data[256];
+    };
+
+    byte address;
+}OAM; //sprite state sheet
+
+#define PPU_BUS_SIZE (0x3FFF)
 
 //Start of PPU struct
 typedef struct{
@@ -117,6 +134,7 @@ typedef struct{
         word attrHi;
     }bgShift;
 
+    OAM ppuOAM;
 
     byte dataByteBuffer;
 
@@ -132,6 +150,8 @@ typedef struct{
     int PALCOL[0x40];
 }PPU;
 
+void ppuSwallowOAMDMA(int page[256]);
+
 void initPpu();
 void dumpPpuBus();
 void ppuClock(CPU* cpu);
@@ -141,3 +161,5 @@ byte ppuRegRead(word address);
 
 bool ppuGetNmiStatus(void);
 void ppuClearNmiStatus(void);
+
+#define OAM_DMA_ADDR 0x4014
