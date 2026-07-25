@@ -34,7 +34,19 @@ typedef struct{
 typedef struct __attribute__((packed, aligned(1))){
     byte y;
     byte tile;
-    byte attributes;
+    union{
+        struct{
+            byte palette : 2;
+            byte unused1 : 1;
+            byte unused2 : 1;
+            byte unused3 : 1;
+            byte priority : 1;
+            byte horizontal_flip:1;
+            byte vertical_flip:1;
+        };
+
+        byte full;
+    }attribute;
     byte x;
 }sprite; // one single unit of sprite state information
 
@@ -150,7 +162,7 @@ typedef struct{
     int PALCOL[0x40];
 }PPU;
 
-void ppuSwallowOAMDMA(int page[256]);
+void ppuSwallowOAMDMA(byte page[256]);
 
 void initPpu();
 void dumpPpuBus();

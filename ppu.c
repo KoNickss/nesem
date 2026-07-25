@@ -80,7 +80,7 @@ fixed
 //
 // ----
 
-void ppuSwallowOAMDMA(int page[256]){
+void ppuSwallowOAMDMA(byte page[256]){
     for(int i = 0; i < 256; ++i){
         ppu.ppuOAM.data[i] = page[i];
     }
@@ -492,7 +492,6 @@ static byte bgMSBbuf;
 
 static unsigned int img_data[PPU_WIDTH * PPU_HEIGHT];
 static unsigned int window_img_data[(SCREEN_WIDTH * PIXEL_SIZE) * (SCREEN_HEIGHT * PIXEL_SIZE)];
-static word crt_x = 0;
 
 
 
@@ -677,10 +676,10 @@ void ppuClock(CPU* cpu){
 
                 case 6:
                     bgMSBbuf = ppuRead((ppu.control.backgroundPatternTable << 12) + (word)(NTbuf << 4) + ((word)ppu.vReg.field.fineY) + 8);
-                    loadBackShifters();
                 break;
 
                 case 7:
+                    loadBackShifters();
                     incrementScrollX_Routine();
                 break;
 
@@ -709,7 +708,7 @@ void ppuClock(CPU* cpu){
             cpuNmi(cpu);
         }
         ppu.status.vblank = true;
-        crt_x = 0;
+
         #if PIXEL_SIZE == 1
             window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
         #else
@@ -719,12 +718,6 @@ void ppuClock(CPU* cpu){
             #endif
             window_update_image(SCREEN_WIDTH*PIXEL_SIZE, SCREEN_HEIGHT * PIXEL_SIZE, prepare_screen_image());
         #endif
-    }
-
-    if(scanline > 260){
-        scanline = -1;
-        crt_x = 0;
-        ppu.status.vblank = false;
     }
 
     byte bgPixel = 0;
@@ -762,7 +755,11 @@ void ppuClock(CPU* cpu){
     if(cycle >= 341){
         cycle = 0;
         scanline++;
-        crt_x = 0;
+    }
+
+    if(scanline > 260){
+        scanline = -1;
+        ppu.status.vblank = false;
     }
 }
 

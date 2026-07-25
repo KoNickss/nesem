@@ -23,14 +23,13 @@ unsigned char bus[BUS_SIZE]; //this is the bus array
 
 #define TRANSLATE_PPU_ADDRESS(address) ((address - PPU_START) % 8 + PPU_START)
 
-int CPU_TIMEOUT_CYCLES = 0;
+int cpu_timeout_cycles = 0;
 
-void performOamDMA(){
-    byte pageID = busRead8(OAM_DMA_ADDR);
+void performOamDMA(byte pageID){
     word startAddr = pageID << 8;
     word stopAddr = (pageID + 1) << 8;
 
-    int page[256];
+    byte page[256];
 
     for(int i = 0; i < stopAddr; ++i){
         byte oamAddr = i & 0x00FF; //LS 8 bits
@@ -60,19 +59,19 @@ void busWrite8(word address, word data){
                 joypad_publish_state();
             }
         }
+        if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+            address &= 0b11111111111;
 
         if(address == OAM_DMA_ADDR){
             //STOP!! TRIGGER DIRECT MEMORY ACCESS: copy one entire page of cpu memory to the PPU's OAM (sprite state sheet), as manually doing this usind PPU oam data/addr regs would be slow. Almost all roms but the most primitive use this.
-
-            bus[address] = (byte)data;
 
             #ifdef DEBUG
                 printf("OAM_DMA!!!!\n");
             #endif
 
-            performOamDMA(); //because DMAs *usually* happen during vblank, we can get away with an instant copy and just bill the cycle cost to the cpu artificially, but to be 100% accurate we could paint it in as one by one, but that seems useless for the most part
+            performOamDMA((byte)data); //because DMAs *usually* happen during vblank, we can get away with an instant copy and just bill the cycle cost to the cpu artificially, but to be 100% accurate we could paint it in as one by one, but that seems useless for the most part
 
-            CPU_TIMEOUT_CYCLES += 514; //bill it to the cpu
+            cpu_timeout_cycles += 514; //bill it to the cpu
 
             return;
 
@@ -88,8 +87,8 @@ word busRead8(word address){
     if((data = mapper000_Read(address, false)) >= 0x100){ //we first ask the mapper to read the data from the address for us in case its on the cartridge, if it returns 0x100 (0xFF + 1 aka impossible to get from reading a byte) that means the data stored at that address is not on the cartridge, but rather on the nes memory, thus we hand the job over to the bus
 
 
-        /*if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
-            address %= 0x07FF;*/
+        if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+            address &= 0b11111111111;
 
 
         if(PPU_START <= address && address <= PPU_END){
@@ -197,8 +196,8 @@ int main(int argc, char * argv[]){
         //RUN THE CPU CLOCK ONE TIME
 
         int cpuCycles = cpuClock(cpu);
-        cpuCycles += CPU_TIMEOUT_CYCLES;
-        CPU_TIMEOUT_CYCLES = 0;
+        cpuCycles += cpu_timeout_cycles;
+        cpu_timeout_cycles = 0;
 
         debug_print_instruction(cpu, busRead8(cpu->PC));
 
