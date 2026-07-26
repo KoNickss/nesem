@@ -31,10 +31,9 @@ typedef struct{
     };
 }locationRegister;
 
-typedef struct __attribute__((packed, aligned(1))){
-    byte y;
-    byte tile;
-    union{
+
+
+typedef union{
         struct{
             byte palette : 2;
             byte unused1 : 1;
@@ -46,19 +45,43 @@ typedef struct __attribute__((packed, aligned(1))){
         };
 
         byte full;
-    }attribute;
+}SpriteAttribute_t;
+
+typedef struct __attribute__((packed, aligned(1))){
+    byte y;
+    byte tile;
+    SpriteAttribute_t attribute;
     byte x;
 }sprite; // one single unit of sprite state information
 
+
+#define MAX_NUM_SPRITES (64)
 typedef struct{
     union{
-        sprite sprites[64];
+        sprite sprites[MAX_NUM_SPRITES];
 
-        byte data[256];
+        byte data[MAX_NUM_SPRITES * sizeof(sprite)];
     };
 
     byte address;
 }OAM; //sprite state sheet
+
+typedef struct{
+    byte lsb;
+    byte msb;
+    SpriteAttribute_t attribute;
+    byte x;
+}SecondaryOAM_PixData;
+
+typedef struct{
+    sprite sprites[MAX_NUM_SPRITES];
+    SecondaryOAM_PixData pix_data[MAX_NUM_SPRITES];
+
+    size_t sprites_size;
+    size_t sprites_capacity;
+    size_t pix_data_size;
+}SecondaryOAM;
+
 
 #define PPU_BUS_SIZE (0x3FFF)
 
@@ -147,6 +170,9 @@ typedef struct{
     }bgShift;
 
     OAM ppuOAM;
+    SecondaryOAM secondary_oam;
+    bool frame_counter;
+
 
     byte dataByteBuffer;
 

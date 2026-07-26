@@ -27,13 +27,11 @@ int cpu_timeout_cycles = 0;
 
 void performOamDMA(byte pageID){
     word startAddr = pageID << 8;
-    word stopAddr = (pageID + 1) << 8;
 
     byte page[256];
 
-    for(int i = 0; i < stopAddr; ++i){
-        byte oamAddr = i & 0x00FF; //LS 8 bits
-        page[oamAddr] = busRead8(i);
+    for(word i = 0; i < sizeof(page); ++i){
+        page[i] = busRead8(startAddr + i);
     }
 
     ppuSwallowOAMDMA(page);
@@ -64,10 +62,6 @@ void busWrite8(word address, word data){
 
         if(address == OAM_DMA_ADDR){
             //STOP!! TRIGGER DIRECT MEMORY ACCESS: copy one entire page of cpu memory to the PPU's OAM (sprite state sheet), as manually doing this usind PPU oam data/addr regs would be slow. Almost all roms but the most primitive use this.
-
-            #ifdef DEBUG
-                printf("OAM_DMA!!!!\n");
-            #endif
 
             performOamDMA((byte)data); //because DMAs *usually* happen during vblank, we can get away with an instant copy and just bill the cycle cost to the cpu artificially, but to be 100% accurate we could paint it in as one by one, but that seems useless for the most part
 

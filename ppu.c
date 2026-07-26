@@ -360,7 +360,7 @@ static void sterlize_ppu(){
     }
 }
 
-int getFormatColorFromPaletteRam(byte palette, byte pixel){
+static int getFormatColorFromPaletteRam(byte palette, byte pixel){
     word addr;
     if(pixel) addr = 0x3F00 + (palette << 2) + (pixel & 0x3F);
     if(!pixel) addr = 0x3F00;
@@ -475,6 +475,12 @@ void initPpu(){
 
     sterlize_ppu();
 
+    ppu.secondary_oam.sprites_capacity = 8;
+    ppu.secondary_oam.sprites_size = 0;
+    ppu.secondary_oam.pix_data_size = 0;
+    memset(ppu.secondary_oam.sprites, 0xFF, sizeof(ppu.secondary_oam.sprites));
+    memset(ppu.secondary_oam.pix_data, 0xFF, sizeof(ppu.secondary_oam.pix_data));
+
     window_init(SCREEN_WIDTH * PIXEL_SIZE, SCREEN_HEIGHT * PIXEL_SIZE);
 
     //pthread_create(&ppuThread_id, NULL, ppuThread, NULL);
@@ -496,7 +502,7 @@ static unsigned int window_img_data[(SCREEN_WIDTH * PIXEL_SIZE) * (SCREEN_HEIGHT
 
 
 
-void loadBackShifters(){
+static void loadBackShifters(){
     if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
         return;
     }
@@ -525,7 +531,7 @@ void loadBackShifters(){
 }
 
 
-void updateShifters(){
+static void updateShifters(){
     if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
         return;
     }
@@ -542,7 +548,7 @@ void updateShifters(){
 
 //TODO: maybe make nametable id a union
 
-void incrementScrollX_Routine(){
+static void incrementScrollX_Routine(){
     if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
         return;
     }
@@ -558,7 +564,7 @@ void incrementScrollX_Routine(){
     }
 }
 
-void incrementScrollY_Routine(){
+static void incrementScrollY_Routine(){
     if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
         return;
     }
@@ -583,7 +589,7 @@ void incrementScrollY_Routine(){
     }
 }
 
-void resetAddressX_Routine(){ // IMPORTANT V SYNC
+static void resetAddressX_Routine(){ // IMPORTANT V SYNC
     if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
         return;
     }
@@ -594,7 +600,7 @@ void resetAddressX_Routine(){ // IMPORTANT V SYNC
     }
 }
 
-void resetAddressY_Routine(){ // IMPORTANT V SYNC
+static void resetAddressY_Routine(){ // IMPORTANT V SYNC
     if(!ppu.mask.enableBackgroundRendering && !ppu.mask.enableSpriteRendering){
         return;
     }
@@ -607,7 +613,7 @@ void resetAddressY_Routine(){ // IMPORTANT V SYNC
 
 
 //Scales the raw PPU output and crops the sides
-unsigned int* prepare_screen_image(void){
+static unsigned int* prepare_screen_image(void){
     const unsigned int EFFECTIVE_WIN_WIDTH = SCREEN_WIDTH * PIXEL_SIZE;
 
     for(win_size_t y = 0; y < SCREEN_HEIGHT; y++){
@@ -647,6 +653,79 @@ void ppuClock(CPU* cpu){
             ppu.ppuOAM.address = 0;
         } // covers both visible and pre-render scanlines I think
         // TODO: sanity check
+
+
+        //Secondary OAM clear
+        if(cycle == 1){
+            memset(ppu.secondary_oam.sprites, 0xFF, sizeof(ppu.secondary_oam.sprites));
+            ppu.secondary_oam.sprites_size = 0;
+        }
+        //Sprite evaluation
+        if(cycle == 65 && scanline >= 0){   //if(65 <= cycle && cycle <= 256){
+            for(word sprite_idx = 0; sprite_idx < MAX_NUM_SPRITES; sprite_idx++){
+                if(0xEF <= ppu.ppuOAM.sprites[sprite_idx].y && ppu.ppuOAM.sprites[sprite_idx].y <= 0xFF) continue; //Real PPU does not render at this Y coordinate
+                if(scanline < ppu.ppuOAM.sprites[sprite_idx].y) continue; //Guaranteed to not be visible
+                if(scanline - ppu.ppuOAM.sprites[sprite_idx].y >= 8) continue; //Not visible anymore
+                if(ppu.secondary_oam.sprites_size == ppu.secondary_oam.sprites_capacity) continue; //Secondary OAM is full!
+
+                ppu.secondary_oam.sprites[ppu.secondary_oam.sprites_size] = ppu.ppuOAM.sprites[sprite_idx];
+
+                ppu.secondary_oam.sprites_size++;
+            }
+        }
+        //Copy pixel data into secondary OAM latches
+        if(257 <= cycle && cycle <= 320 && 0 <= scanline && scanline < SCREEN_HEIGHT){
+            if(cycle == 257){
+                //initialization
+                ppu.secondary_oam.pix_data_size = 0;
+            }
+            word cycle_relative = cycle - 257;
+            byte sprite_idx = cycle_relative / 8;
+            SecondaryOAM_PixData* pixdata = &ppu.secondary_oam.pix_data[sprite_idx];
+
+            signed int relative_y = scanline - ppu.secondary_oam.sprites[sprite_idx].y;
+            if(ppu.secondary_oam.sprites[sprite_idx].attribute.vertical_flip){
+                relative_y = 8 - relative_y - 1;
+            }
+            word ppu_tile_addr = ((word)ppu.control.spritePatternTable << 12) + (word)(ppu.secondary_oam.sprites[sprite_idx].tile << 4) + relative_y;
+            switch(cycle_relative % 8){
+                case 0:
+                    pixdata->x = ppu.secondary_oam.sprites[sprite_idx].x;
+                break;
+                case 2:
+                    pixdata->attribute = ppu.secondary_oam.sprites[sprite_idx].attribute;
+                break;
+                case 4:
+                    pixdata->lsb = ppuRead( ppu_tile_addr + 0);
+                break;
+                case 6:
+                    pixdata->msb = ppuRead( ppu_tile_addr + 8);
+                break;
+                case 7:
+                    ppu.secondary_oam.pix_data_size++;
+                break;
+                default:
+                break;
+            }
+        }
+        //HACK: Additional support for more than 8 sprites. Choose to move additional hacked in secondary OAM after the official 8 have been moved over 
+        if(cycle == 321){
+            if(ppu.secondary_oam.sprites_size > 8 && 0){
+                for(word sprite_idx = 8; sprite_idx < ppu.secondary_oam.sprites_size; sprite_idx++){
+                    SecondaryOAM_PixData* pixdata = &ppu.secondary_oam.pix_data[sprite_idx];
+                    word relative_y = scanline - ppu.secondary_oam.sprites[sprite_idx].y;
+                    if(ppu.secondary_oam.sprites[sprite_idx].attribute.vertical_flip){
+                        relative_y = 8 - relative_y - 1;
+                    }
+                    word ppu_tile_addr = ((word)ppu.control.spritePatternTable << 12) + (word)(ppu.secondary_oam.sprites[sprite_idx].tile << 4) + relative_y;
+                    pixdata->x = ppu.secondary_oam.sprites[sprite_idx].x;
+                    pixdata->attribute = ppu.secondary_oam.sprites[sprite_idx].attribute;
+                    pixdata->lsb = ppuRead( ppu_tile_addr + 0);
+                    pixdata->msb = ppuRead( ppu_tile_addr + 8);
+                    ppu.secondary_oam.pix_data_size++;
+                }
+            }
+        }
 
         if((cycle >= 1 && cycle <= 257) || (cycle >= 321 && cycle <= 336)){
 
@@ -703,13 +782,13 @@ void ppuClock(CPU* cpu){
     }
 
 
-    if(scanline == 241 && cycle == 0){
+    if(scanline == 241 && cycle == 1){
         if(ppu.control.nmiVerticalBlank){
             cpuNmi(cpu);
         }
         ppu.status.vblank = true;
 
-        #if PIXEL_SIZE == 1
+        #if PIXEL_SIZE == 1 && PPU_DRAW_CROPPED_SCREEN == false
             window_update_image(PPU_WIDTH, PPU_HEIGHT, (void*)img_data);
         #else
             #if DEBUG
@@ -741,12 +820,64 @@ void ppuClock(CPU* cpu){
     if(bgPixel == 0) bgPal = 0;
 
 
+    //BG Drawing
     if(scanline >= 0 && scanline < PPU_HEIGHT && cycle >= 0 && cycle < PPU_WIDTH){
 
         unsigned long selected_pixel = PPU_WIDTH * scanline + cycle;
 
         int color = getFormatColorFromPaletteRam(bgPal, bgPixel);
         img_data[selected_pixel] = color;
+    }
+
+    //Sprite drawing
+    if(0 <= cycle && cycle <= SCREEN_WIDTH && (0 <= scanline && scanline < SCREEN_HEIGHT)){
+        for(word sprite_idx = ppu.secondary_oam.pix_data_size; sprite_idx-- > 0;){
+            SecondaryOAM_PixData* pixdata = &ppu.secondary_oam.pix_data[sprite_idx];
+
+            if(pixdata->x > cycle) continue; //Sprite is too far to the right yet. Dont render yet
+            if(cycle - pixdata->x >= 8) continue; //Cycle has passed the rightmost pixel of this sprite. Dont render
+
+            byte bmask = 0;
+            if(!pixdata->attribute.horizontal_flip){
+                bmask = 0b1 << 7; //Grab last bit instead of first
+            }else{
+                bmask = 0b1;
+            }
+
+            byte pixelLo = !!(pixdata->lsb & bmask);
+            byte pixelHi = !!(pixdata->msb & bmask);
+            byte spritePix = (pixelHi << 1) | pixelLo;
+
+            if(!pixdata->attribute.horizontal_flip){
+                pixdata->lsb <<= 1;
+                pixdata->msb <<= 1;
+            }else{
+                pixdata->lsb >>= 1;
+                pixdata->msb >>= 1;
+            }
+
+            byte spritePal = pixdata->attribute.palette;
+
+            unsigned long selected_pixel = (PPU_WIDTH * scanline) + cycle;
+            int color = getFormatColorFromPaletteRam(spritePal + 4, spritePix);
+
+            //Pixel Priority System
+            if(bgPixel == 0){
+                if(spritePix == 0){
+                    color = getFormatColorFromPaletteRam(0, 0);
+                }
+            }else{
+                if(spritePix == 0){
+                    color = getFormatColorFromPaletteRam(bgPal, bgPixel);
+                }else{
+                    if(pixdata->attribute.priority){
+                        color = getFormatColorFromPaletteRam(bgPal, bgPixel);
+                    }
+                }
+            }
+
+            img_data[selected_pixel] = color;
+        }
     }
 
 
