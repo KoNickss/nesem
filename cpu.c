@@ -1886,6 +1886,8 @@ void handleErrors(CPU * __restrict__ cpu){
         raiseError(UNALLOC_OP, cpu);
     }
 
+    #ifdef DEBUG
+    //Must only be active during debug to avoid invalid openbus behavior
     struct instruction cur_inst = cpu->opcodes[busRead8(cpu->PC)];
 
     if(cur_inst.microcode == NULL){
@@ -1903,6 +1905,7 @@ void handleErrors(CPU * __restrict__ cpu){
     if(cur_inst.bytes == 0){
         raiseError(UNKNOWN_BYTES, cpu);
     }
+    #endif
     /*
     if(cur_inst.microcode < ORA || cur_inst.microcode > TYA){
         raiseError(UNKNOWN_MICRO, cpu);
@@ -1971,13 +1974,14 @@ int cpuClock(CPU * cpu){
     handleErrors(cpu);
 
     cpu->pcNeedsInc = true;
+    byte execOPdata = busRead8(cpu->PC); //get OPCODE byte (ex 0x4C)
+    byte sizeOfInstruction = cpu->opcodes[execOPdata].bytes;
     word args = 0;
+    args = busRead8(cpu->PC + 1); //add first arg byte
     if(cpu->opcodes[busRead8(cpu->PC)].bytes > 2){ //if args is 16bit shifts the first byte to the hi byte (they get reversed basically)
-        args = busRead8(cpu->PC + 2) << 8;
+        args |= busRead8(cpu->PC + 2) << 8;
     }
-    args |= busRead8(cpu->PC + 1); //add first arg byte
 
-    byte sizeOfInstruction = cpu->opcodes[busRead8(cpu->PC)].bytes;
 
     //
     //
@@ -1985,7 +1989,6 @@ int cpuClock(CPU * cpu){
     //
     //
 
-    byte execOPdata = busRead8(cpu->PC); //get OPCODE byte (ex 0x4C)
     struct instruction execOP = cpu->opcodes[execOPdata]; //fetch OPCODE data, addressing mode and microcode (ex 0x4C -> JMP)
 
     execOP.microcode(cpu, args, execOP.mode); //EXECUTE OPCODE

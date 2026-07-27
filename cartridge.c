@@ -11,9 +11,63 @@ word romStartAddress = 0x0;
 
 bool _verticalMirroring;
 
+
 bool isVerticalMirroring(){
     return _verticalMirroring;
 }
+
+
+typedef bool (*cart_write_fptr)(word addr, byte data);
+typedef bool (*cart_read_fptr)(word addr, byte* data_out);
+
+
+static cart_write_fptr cart_PRG_Write_fptr = NULL;
+static cart_read_fptr cart_PRG_Read_fptr = NULL;
+static cart_write_fptr cart_CHR_Write_fptr = NULL;
+static cart_read_fptr cart_CHR_Read_fptr = NULL;
+
+
+
+bool mapper000_CHR_Read(word address, byte* data_out){
+    SMART_ASSERT(data_out != NULL, "Data output address was NULL!");
+    if(Header.CHR_BANKS == 0){
+        return false; //if no CHR banks, nothing to mirror
+    }else if (address <= 0x2000){
+        *data_out = CHRROM[address];
+        return true;
+    }else{
+        return false;
+    }
+    return false;
+}
+
+bool mapper000_CHR_Write(word address, byte data){
+    return false; //no PRGRAM configured in this cartridge, so all writes get denied
+};
+
+
+bool mapper000_PRG_Read(word address, byte* data_out){
+    SMART_ASSERT(data_out != NULL, "Data output address was NULL!");
+    if(!((address <= 0xFFFF) && (address >= 0x8000))){ //if not in the address range the mapper functions in
+        return false;
+    }else{
+        if(Header.PRG_BANKS > 1){ //32K model
+            *data_out = PRGROM[address - 0x8000];
+        }else{ //16K model
+            *data_out = PRGROM[(address - 0x8000) % 0x4000];
+        }
+        return true;
+    }
+    return false;
+}
+
+bool mapper000_PRG_Write(word address, byte data){
+    return false; //no PRGRAM configured in this cartridge, so all writes get denied
+};
+
+
+
+
 
 void loadRomfileHeader(FILE * romfile){
     byte verificationToken[3] = "NES";
@@ -33,6 +87,11 @@ void loadRomfileHeader(FILE * romfile){
     for(byte i = 0; i < 5; i++){ //Remove padding
         getc(romfile);
     }
+
+    cart_PRG_Write_fptr = mapper000_PRG_Write;
+    cart_PRG_Read_fptr = mapper000_PRG_Read;
+    cart_CHR_Write_fptr = mapper000_CHR_Write;
+    cart_CHR_Read_fptr = mapper000_CHR_Read;
 }
 
 void initBanks(char name[]){
@@ -75,28 +134,26 @@ void initBanks(char name[]){
     romStartAddress = busRead16(ROM_START_VECTOR_ADDR);
 }
 
-word mapper000_Read(word address, bool ppu){
-    if(!ppu){ //if not ppu talking
-        if(!((address <= 0xFFFF) && (address >= 0x8000))){ //if not in the address range the mapper functions in
-            return not_handling_this; //not_handling_this is a 16 bit data integer, no byte will return this ever so this is our "not handling this" return code
-        }else{
-            if(Header.PRG_BANKS > 1){ //32K model
-                return PRGROM[address - 0x8000];
-            }else{ //16K model
-                return PRGROM[(address - 0x8000) % 0x4000];
-            }
-        }
-    }else{ //if PPU
-        if(Header.CHR_BANKS == 0){
-        	return not_handling_this; //if no CHR banks, nothing to mirror
-        }else if (address <= 0x2000){
-        	return CHRROM[address];
-		}else{
-			return not_handling_this;
-		}
-    }
+
+
+
+bool cart_PRG_Read(word address, byte* data_out){
+    SMART_ASSERT(cart_PRG_Read_fptr != NULL, "No read function pointer!");
+    return cart_PRG_Read_fptr(address, data_out);
 }
 
-bool mapper000_Write(word address, byte data, bool ppu){
-    return false; //no PRGRAM configured in this cartridge, so all writes get denied
-};
+bool cart_PRG_Write(word address, byte data){
+    SMART_ASSERT(cart_PRG_Write_fptr != NULL, "No write function pointer!");
+    return cart_PRG_Write_fptr(address, data);
+}
+
+bool cart_CHR_Read(word address, byte* data_out){
+    SMART_ASSERT(cart_CHR_Read_fptr != NULL, "No read function pointer!");
+    return cart_CHR_Read_fptr(address, data_out);
+}
+
+bool cart_CHR_Write(word address, byte data){
+    SMART_ASSERT(cart_CHR_Write_fptr != NULL, "No write function pointer!");
+    return cart_CHR_Write_fptr(address, data);
+}
+
