@@ -102,12 +102,10 @@ static byte ppuRead(word address){
             }
         }
 
-        if (address == 0x3F10 || address == 0x3F14 || address == 0x3F18 || address == 0x3F1C) {
-            address -= 0x0010;
+        if(address >= 0x3F00 && address <= 0x3FFF) {
+            address &= 0x3F1F; // Mirror down to $3F00-$3F1F
+            if((address & 0x0013) == 0x0010) address &= ~0x0010; // Mirror $3F10/14/18/1C to $3F00/04/08/0C
         }
-
-        if(address >= 0x3000 && address <= 0x3EFF) //mirrored region of nametables
-            address -= 0x1000;
 
         if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
             address = (address - 0x3F20) % 0x20 + 0x3F00;
@@ -133,12 +131,10 @@ static void ppuWrite(word address, byte data){
             }
         }
 
-        if (address == 0x3F10 || address == 0x3F14 || address == 0x3F18 || address == 0x3F1C) {
-            address -= 0x0010;
+        if(address >= 0x3F00 && address <= 0x3FFF) {
+            address &= 0x3F1F; // mirror down to $3F00-$3F1F
+            if((address & 0x0013) == 0x0010) address &= ~0x0010; // mirror $3F10/14/18/1C to $3F00/04/08/0C
         }
-
-        if(address >= 0x3000 && address <= 0x3EFF) //mirrored region of nametables
-            address -= 0x1000;
 
         if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
             address = ((address - 0x3F20) & 0b11111) + 0x3F00;
@@ -635,17 +631,28 @@ static unsigned int* prepare_screen_image(void){
     return window_img_data;
 }
 
+bool next_renderingSprite0 = false;
+bool renderingSprite0 = false;
+
 void ppuClock(CPU* cpu){
     //ppu.status.sprite0Hit=(scanline == 30) ;//&& (cycle >= 90); //TODO: Remove. 'Emulates' SMB1 sprite0hit
-    ppu.status.sprite0Hit=(scanline >= 190) || (scanline == 30) ; //TODO: Remove. 'Emulates' Ebike sprite0hit
+    //ppu.status.sprite0Hit=(scanline >= 190) || (scanline == 30) ; //TODO: Remove. 'Emulates' Ebike sprite0hit
+
+    #ifdef DEBUG
+        if(ppu.status.sprite0Hit) printf("SPRITE 0 HIT!\n");
+    #endif
+
 
     if(ppu.nmiNow){
         ppu.nmiNow = 0;
         cpuNmi(cpu);
     }
 
-    if(scanline == -1 && cycle == 1)
+    if(scanline == -1 && cycle == 1){
         ppu.status.vblank = 0;
+        ppu.status.sprite0Hit = 0;
+    }
+
     if(scanline >= -1 && scanline <= 239){
         //visible area
 
@@ -662,6 +669,7 @@ void ppuClock(CPU* cpu){
         }
         //Sprite evaluation
         if(cycle == 65 && scanline >= 0){   //if(65 <= cycle && cycle <= 256){
+            next_renderingSprite0 = 0;
             for(word sprite_idx = 0; sprite_idx < MAX_NUM_SPRITES; sprite_idx++){
                 if(0xEF <= ppu.ppuOAM.sprites[sprite_idx].y && ppu.ppuOAM.sprites[sprite_idx].y <= 0xFF) continue; //Real PPU does not render at this Y coordinate
                 if(scanline < ppu.ppuOAM.sprites[sprite_idx].y) continue; //Guaranteed to not be visible
@@ -669,6 +677,11 @@ void ppuClock(CPU* cpu){
                 if(ppu.secondary_oam.sprites_size == ppu.secondary_oam.sprites_capacity) continue; //Secondary OAM is full!
 
                 ppu.secondary_oam.sprites[ppu.secondary_oam.sprites_size] = ppu.ppuOAM.sprites[sprite_idx];
+
+                if(sprite_idx == 0){
+                    next_renderingSprite0 = 1; //if we got to this point with sprite0, we're rendering it next scanline, so we're preparing to check for a sprite0 hit
+                    //printf("SP0 REN!\n");
+                }
 
                 ppu.secondary_oam.sprites_size++;
             }
@@ -708,7 +721,7 @@ void ppuClock(CPU* cpu){
                 break;
             }
         }
-        //HACK: Additional support for more than 8 sprites. Choose to move additional hacked in secondary OAM after the official 8 have been moved over 
+        //HACK: Additional support for more than 8 sprites. Choose to move additional hacked in secondary OAM after the official 8 have been moved over
         if(cycle == 321){
             if(ppu.secondary_oam.sprites_size > 8 && 0){
                 for(word sprite_idx = 8; sprite_idx < ppu.secondary_oam.sprites_size; sprite_idx++){
@@ -873,6 +886,25 @@ void ppuClock(CPU* cpu){
                     if(pixdata->attribute.priority){
                         color = getFormatColorFromPaletteRam(bgPal, bgPixel);
                     }
+
+                    //Both BG and FG are opaque, try for sprite0 hit
+                    //
+                    // SPRITE0 HIT!!
+                    //
+                    //
+                    if(renderingSprite0 && sprite_idx == 0
+                        && ppu.mask.enableSpriteRendering
+                        && ppu.mask.enableBackgroundRendering
+                        && !((cycle >= 0 && cycle <= 7) && (ppu.mask.showSpritesDebug == 0 || ppu.mask.showBackdropDebug == 0))
+                        && cycle != 255
+                    ){
+                        //HIT!
+
+                        ppu.status.sprite0Hit = true;
+
+                    }
+
+                    //printf("%d %d %d %d %d %d\n", renderingSprite0, sprite_idx == 0, ppu.mask.enableSpriteRendering, ppu.mask.enableBackgroundRendering, !((cycle >= 0 && cycle <= 7) && (ppu.mask.showSpritesDebug == 0 || ppu.mask.showBackdropDebug == 0)),  cycle != 255);
                 }
             }
 
@@ -886,6 +918,15 @@ void ppuClock(CPU* cpu){
     if(cycle >= 341){
         cycle = 0;
         scanline++;
+
+        if(renderingSprite0){
+            renderingSprite0 = 0;
+        }
+
+        if(next_renderingSprite0){ //if we loaded sprite0 into secondary OAM last scanline, this new one we'll surely be rendering it, so we need to trigger the sprite0 hit check
+            next_renderingSprite0 = 0;
+            renderingSprite0 = 1;
+        }
     }
 
     if(scanline > 260){
