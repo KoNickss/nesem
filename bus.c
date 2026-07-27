@@ -37,13 +37,11 @@ void performOamDMA(byte pageID){
     ppuSwallowOAMDMA(page);
 }
 
-void busWrite8(word address, word data){
+void busWrite8(word address, byte data){
 
-    if(!mapper000_Write(address, data, false)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
-
-        /*if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
-            address %= 0x07FF;*/
-
+    if(cart_PRG_Write(address, data)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
+        return;
+    }else{
         if(PPU_START <= address && address <= PPU_END){
             address = TRANSLATE_PPU_ADDRESS(address);
             ppuRegWrite(address, data & 0xFF);
@@ -52,13 +50,17 @@ void busWrite8(word address, word data){
 
         if(address == JOYPAD1_ADDR){
             if((data & 0b1) == 0b1){
-		    joypad_prepare_read();
+                joypad_prepare_read();
             }else if((data & 0b1) == 0b0){
                 joypad_publish_state();
             }
+            return;
         }
-        if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+        if(address <= 0x1FFF){ //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
             address &= 0b11111111111;
+            bus[address] = (byte)data;
+            return;
+        }
 
         if(address == OAM_DMA_ADDR){
             //STOP!! TRIGGER DIRECT MEMORY ACCESS: copy one entire page of cpu memory to the PPU's OAM (sprite state sheet), as manually doing this usind PPU oam data/addr regs would be slow. Almost all roms but the most primitive use this.
@@ -71,31 +73,42 @@ void busWrite8(word address, word data){
 
         }
 
-        bus[address] = (byte)data;
+        DWARN("Could not write to address 0x%X! Open Bus Write!", address);
     }
 }
 
-word busRead8(word address){
+byte busRead8(word address){
 
-    word data;
-    if((data = mapper000_Read(address, false)) >= 0x100){ //we first ask the mapper to read the data from the address for us in case its on the cartridge, if it returns 0x100 (0xFF + 1 aka impossible to get from reading a byte) that means the data stored at that address is not on the cartridge, but rather on the nes memory, thus we hand the job over to the bus
+    static byte data = 0;
+    //we first ask the mapper to read the data from the address for us in case its on the cartridge, if it returns false that means the data stored at that address is not on the cartridge, but rather on the nes memory, thus we hand the job over to the bus
+    bool valid_cart_response = cart_PRG_Read(address, &data);
+    if(valid_cart_response){
+        return data;
+    }else{
 
 
-        if(address <= 0x1FFF) //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
+        if(address <= 0x1FFF){ //a lot of regions on the NES bus are mirrored/synced, this just ensures we are always writing to the parent region, not to a empty cloned one
             address &= 0b11111111111;
+            data = bus[address];
+            return data;
+        }
 
 
         if(PPU_START <= address && address <= PPU_END){
             address = TRANSLATE_PPU_ADDRESS(address);
-            return ppuRegRead(address);
+            data = ppuRegRead(address);
+            return data;
         }
 
         if(address == JOYPAD1_ADDR){
-            return joypad_read_bit(JOYPAD_1);
+            byte joypad_read = joypad_read_bit(JOYPAD_1);
+            byte joypad_mask = 0b1111; //Only affects lower 4 bits
+            data = (data & ~joypad_mask) | (joypad_read & joypad_mask); //Keep the upper 4 bits of last read byte
+
+            return data;
         }
 
-        return bus[address];
-    }else{
+        DWARN("Open bus read 0x%X", address);
         return data;
     }
 }
@@ -193,7 +206,9 @@ int main(int argc, char * argv[]){
         cpuCycles += cpu_timeout_cycles;
         cpu_timeout_cycles = 0;
 
-        debug_print_instruction(cpu, busRead8(cpu->PC));
+        #ifdef DEBUG
+            debug_print_instruction(cpu, busRead8(cpu->PC));
+        #endif
 
         for(int i = 0; i < 3 * cpuCycles; ++i)
             ppuClock(cpu);

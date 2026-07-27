@@ -16,6 +16,7 @@ static void* ppuThread(void* args);
 
 #define PPU_BUS_SIZE (0x3FFF)
 static byte ppuBus[2 + PPU_BUS_SIZE];
+static byte ppu_bus_data_latch = 0;
 
 
 static inline word resolveNameTableAddress(word regData){
@@ -90,9 +91,12 @@ static byte ppuRead(word address){
 
     address &= 0x3FFF;
 
-    word cartResponse;
+    static byte cartResponse = 0;
 
-    if((cartResponse = mapper000_Read(address, true)) == 0x0100){
+    bool valid_cart_response = cart_CHR_Read(address, &cartResponse);
+    if(valid_cart_response){
+        return cartResponse;
+    }else{
 
         if(address >= 0x2000 && address <= 0x2FFF){
             if(verticalMirroring){
@@ -110,10 +114,10 @@ static byte ppuRead(word address){
         if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
             address = (address - 0x3F20) % 0x20 + 0x3F00;
 
-        return ppuBus[address];
+        cartResponse = ppuBus[address];
+        return cartResponse;
     }
 
-    else return cartResponse;
 
 }
 
@@ -121,7 +125,10 @@ static void ppuWrite(word address, byte data){
 
     address &= 0x3FFF;
 
-    if(!mapper000_Write(address, data, true)){
+    if(cart_CHR_Write(address, data)){
+        //valid cart write. Our job here is done. Return
+        return;
+    }else{
 
         if(address >= 0x2000 && address <= 0x2FFF){
             if(verticalMirroring){
@@ -139,7 +146,8 @@ static void ppuWrite(word address, byte data){
         if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
             address = ((address - 0x3F20) & 0b11111) + 0x3F00;
 
-        ppuBus[address] = data;
+        ppu_bus_data_latch = data;
+        ppuBus[address] = ppu_bus_data_latch;
     }
 
 }
@@ -148,6 +156,9 @@ static void ppuWrite(word address, byte data){
 void ppuRegWrite(word address, byte data){
     address -= 0x2000;
     address &= 0b111;
+
+    ppu_bus_data_latch = data;
+
     switch(address){
         case 0: //ppuctrl
 
@@ -233,6 +244,8 @@ void ppuRegWrite(word address, byte data){
             if(ppu.control.vramIncrement) ppu.vReg.data += 32;
             else ppu.vReg.data++;
 
+            ppu_bus_data_latch = data;
+
         break;
 
         default:
@@ -248,19 +261,14 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
 
     address &= 0b111;
 
-    byte returnData;
+    byte returnData = 0;
 
     switch(address){
         case 0: //ppuctrl
-
-            return ppu.control.full;
-
         break;
 
         case 1: //ppumask
-
-            return ppu.mask.full;
-
+            
         break;
 
         case 2: //ppustatus
@@ -270,21 +278,21 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
 
             ppu.expectingLsb = 0; // <- 'w' latch cant be read, so gamedevs read ppustatus to ensure its state is 0
 
-            return returnData;
-
+            //To properly emulate openbus, we need to only affect the upper bits of the last written value to the data bus latches
+            byte bmask = 0b11100000;
+            ppu_bus_data_latch = (returnData & bmask) | (ppu_bus_data_latch & ~bmask);
+            return ppu_bus_data_latch;
         break;
 
         case 3: //oamAddress
-
-            return ppu.ppuOAM.address;
-
+            ppu_bus_data_latch = ppu.ppuOAM.address;
+            return ppu_bus_data_latch;
         break;
 
         case 4: //oamData
-
             byte oamAddr = ppu.ppuOAM.address;
-            return ppu.ppuOAM.data[oamAddr];
-
+            ppu_bus_data_latch = ppu.ppuOAM.data[oamAddr];
+            return ppu_bus_data_latch;
         break;
 
         case 5: //ppuScroll
@@ -310,7 +318,7 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
             if(ppu.control.vramIncrement) ppu.vReg.data += 32;
             else ppu.vReg.data++;
 
-            return returnData;
+            ppu_bus_data_latch = returnData;
 
         break;
 
@@ -320,6 +328,7 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
         break;
     }
 
+    return ppu_bus_data_latch;  
 }
 
 

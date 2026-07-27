@@ -66,8 +66,7 @@ byte joypad_read_bit(JOYPAD_t joypad_index){
 		jp[joypad_index].is_polled = false;
 	}
 	
-	//Idk why but emulators always have 0x40 as well as the bit read
-	return 0x40 | (byte)read_bit;
+	return (byte)read_bit;
 }
 
 void joypad_zero_out(JOYPAD_t joypad_index){

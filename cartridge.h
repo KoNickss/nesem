@@ -72,6 +72,8 @@ typedef struct{
 
 void initBanks(char * fn);
 
-word mapper000_Read(word address, bool ppu);
-bool mapper000_Write(word address, byte data, bool ppu);
+bool cart_PRG_Read(word address,  byte* data_out);
+bool cart_PRG_Write(word address, byte data);
+bool cart_CHR_Read(word address,  byte* data_out);
+bool cart_CHR_Write(word address, byte data);
 bool isVerticalMirroring();

@@ -6,8 +6,8 @@ void activateCpuNmi();
 
 byte debug_read_do_not_use_pls(word address);
 
-void busWrite8(word address, word data);
-word busRead8(word adress);
+void busWrite8(word address, byte data);
+byte busRead8(word adress);
 word busRead16(word address);
 void busWrite16(word address, word data);
 
