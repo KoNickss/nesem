@@ -1,3 +1,14 @@
+//Miniaudio settings
+#define MA_ENABLE_ONLY_SPECIFIC_BACKENDS
+#define MA_ENABLE_ALSA
+#define MA_ENABLE_PULSEAUDIO
+#define MA_ENABLE_JACK
+#define MA_NO_ENCODING
+#define MA_NO_DECODING
+#define MA_NO_RESOURCE_MANAGER
+#define MA_NO_GENERATION
+#define MA_NO_NODE_GRAPH
+/////
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
 #include "sound.h"
