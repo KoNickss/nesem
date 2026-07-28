@@ -886,11 +886,11 @@ void ppuClock(CPU* cpu){
             //Pixel Priority System
             if(bgPixel == 0){
                 if(spritePix == 0){
-                    color = getFormatColorFromPaletteRam(0, 0);
+                    color = img_data[selected_pixel];
                 }
             }else{
                 if(spritePix == 0){
-                    color = getFormatColorFromPaletteRam(bgPal, bgPixel);
+                    color = img_data[selected_pixel];
                 }else{
                     if(pixdata->attribute.priority){
                         color = getFormatColorFromPaletteRam(bgPal, bgPixel);
