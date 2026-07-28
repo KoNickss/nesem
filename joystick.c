@@ -152,7 +152,7 @@ static int _gpad_read_evdev(gpad_t* gpad){
 									break;
 									default:
 										DERROR("Unknown wiimote key command %X", ev.code);
-									break;
+										continue;
 								}
 
 								//Set the proper bit
