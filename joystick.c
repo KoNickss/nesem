@@ -1037,7 +1037,7 @@ gpad_device_list_t gpad_list_devices(void){
 			return ret;
 		}
 	}
-	ret[num_of_devices] = NULL;
+	ret[cur_cursor] = NULL;
 	return ret;
 }
 
