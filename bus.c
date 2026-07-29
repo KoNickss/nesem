@@ -73,7 +73,7 @@ void busWrite8(word address, byte data){
 
         }
 
-        DWARN("Could not write to address 0x%X! Open Bus Write!", address);
+        //DWARN("Could not write to address 0x%X! Open Bus Write!", address);
     }
 }
 
@@ -108,7 +108,7 @@ byte busRead8(word address){
             return data;
         }
 
-        DWARN("Open bus read 0x%X", address);
+        //DWARN("Open bus read 0x%X", address);
         return data;
     }
 }

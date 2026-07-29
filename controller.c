@@ -134,7 +134,7 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 	word A_MASK = 0b1;
 	word B_MASK = 0b1000;
 	word DPAD_AXIS = 3;
-	word LSTICK_AXIS = 0;
+	ssize_t LSTICK_AXIS = -1;
 	size_t DPAD_DOWN_MASK = 0;
 	size_t DPAD_UP_MASK = 0;
 	size_t DPAD_LEFT_MASK = 0;
@@ -154,8 +154,8 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 					SELECT_MASK = 0b100000000;
 					A_MASK = 0b1;
 					B_MASK = 0b1000;
-					DPAD_AXIS = 3;
-					LSTICK_AXIS = 0;
+					DPAD_AXIS = 0;
+					LSTICK_AXIS = 1;
 
 					joypad_set_button(joypad_index, BUTTON_START, gp->buttons & START_MASK);
 					joypad_set_button(joypad_index, BUTTON_SELECT, gp->buttons & SELECT_MASK);
@@ -189,8 +189,8 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 					SELECT_MASK = 0b1000000;
 					A_MASK = 0b1;
 					B_MASK = 0b100;
-					DPAD_AXIS = 3;
-					LSTICK_AXIS = 0;
+					DPAD_AXIS = 0;
+					LSTICK_AXIS = 1;
 
 					joypad_set_button(joypad_index, BUTTON_START, gp->buttons & START_MASK);
 					joypad_set_button(joypad_index, BUTTON_SELECT, gp->buttons & SELECT_MASK);
@@ -215,20 +215,26 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 		break;
 		case GPAD_CON_NINTENDO:
 			switch(gp->model.nintendo){
+				case GPAD_CON_MODEL_NINTENDO_SWITCH_PRO:
 				case GPAD_CON_MODEL_NINTENDO_WII_U_PRO_CONTROLLER:
 					DEADZONE_STICK = 0.4;
 					START_MASK = 0b1000000000;
 					SELECT_MASK = 0b100000000;
 					A_MASK = 0b1;
 					B_MASK = 0b1000;
-					LSTICK_AXIS = 0;
-
-					DPAD_DOWN_MASK = 0b1 << 14;
-					DPAD_UP_MASK = 0b1 << 13;
-					DPAD_LEFT_MASK = 0b1 << 15;
-					DPAD_RIGHT_MASK = 0b1 << 16;
-
-
+					DPAD_DOWN_MASK = 0b1 << 13;
+					DPAD_UP_MASK = 0b1 << 12;
+					DPAD_LEFT_MASK = 0b1 << 14;
+					DPAD_RIGHT_MASK = 0b1 << 15;
+					LSTICK_AXIS = 1;
+					
+					if(gp->model.nintendo == GPAD_CON_MODEL_NINTENDO_SWITCH_PRO){
+						DPAD_DOWN_MASK = 0;
+						DPAD_LEFT_MASK = 0;
+						DPAD_RIGHT_MASK = 0;
+						DPAD_UP_MASK = 0;
+						DPAD_AXIS = 0;
+					}
 
 					joypad_set_button(joypad_index, BUTTON_START, gp->buttons & START_MASK);
 					joypad_set_button(joypad_index, BUTTON_SELECT, gp->buttons & SELECT_MASK);
@@ -239,6 +245,13 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 					right_pressed = (gp->buttons & DPAD_RIGHT_MASK) || gp->axis[LSTICK_AXIS].x >= (DEADZONE_STICK * 1.0f);
 					up_pressed =    (gp->buttons & DPAD_UP_MASK) || gp->axis[LSTICK_AXIS].y <= (DEADZONE_STICK * -1.0f);
 					down_pressed =  (gp->buttons & DPAD_DOWN_MASK) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
+
+					if(gp->model.nintendo == GPAD_CON_MODEL_NINTENDO_SWITCH_PRO){
+						left_pressed = gp->axis[DPAD_AXIS].x <= (DEADZONE_STICK * -1.0f);
+						right_pressed = gp->axis[DPAD_AXIS].x >= (DEADZONE_STICK * 1.0f);
+						up_pressed = gp->axis[DPAD_AXIS].y <= (DEADZONE_STICK * -1.0f);
+						down_pressed = gp->axis[DPAD_AXIS].y >= (DEADZONE_STICK * 1.0f);
+					}
 
 					joypad_set_button(joypad_index, BUTTON_DOWN, down_pressed);
 					joypad_set_button(joypad_index, BUTTON_UP, up_pressed);

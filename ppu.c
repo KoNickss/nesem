@@ -647,10 +647,6 @@ void ppuClock(CPU* cpu){
     //ppu.status.sprite0Hit=(scanline == 30) ;//&& (cycle >= 90); //TODO: Remove. 'Emulates' SMB1 sprite0hit
     //ppu.status.sprite0Hit=(scanline >= 190) || (scanline == 30) ; //TODO: Remove. 'Emulates' Ebike sprite0hit
 
-    #ifdef DEBUG
-        if(ppu.status.sprite0Hit) printf("SPRITE 0 HIT!\n");
-    #endif
-
 
     if(ppu.nmiNow){
         ppu.nmiNow = 0;

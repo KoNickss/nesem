@@ -47,7 +47,8 @@ typedef enum{
     GPAD_CON_MODEL_NINTENDO_INVALID,
     GPAD_CON_MODEL_NINTENDO_UNKNOWN,
     GPAD_CON_MODEL_NINTENDO_WII_U_PRO_CONTROLLER,
-    GPAD_CON_MODEL_NINTENDO_WII_MOTE
+    GPAD_CON_MODEL_NINTENDO_WII_MOTE,
+    GPAD_CON_MODEL_NINTENDO_SWITCH_PRO
 }GPAD_CON_MODEL_NINTENDO_T;
 
 
@@ -81,7 +82,7 @@ typedef struct{
 
 //void gpad_init();
 
-bool gpad_t_construct(gpad_t* gpad, unsigned int js);
+bool gpad_t_construct(gpad_t* gpad, unsigned int device_id, GPAD_PROTOCOL_MODE_T protocol);
 
 void gpad_t_free(gpad_t* gpad);
 
@@ -106,6 +107,7 @@ typedef struct{
 typedef gpad_device_list_ent_t** gpad_device_list_t;
 
 gpad_device_list_t gpad_list_devices(void);
+gpad_device_list_t gpad_list_evdev_devices(void);
 
 bool gpad_construct_from_device_list_ent(gpad_t* gpad, const gpad_device_list_ent_t* ent);
 

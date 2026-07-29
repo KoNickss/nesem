@@ -145,7 +145,10 @@ void window_init(win_size_t width, win_size_t height){
 
     //Check for controllers
     gpad_device_list_t controller_list = gpad_list_devices();
-    gpad_device_list_ent_t* plugged_in_controller =  *((gpad_device_list_ent_t**)controller_list);
+    gpad_device_list_ent_t* plugged_in_controller = NULL;
+    if(controller_list != NULL){
+        plugged_in_controller = *((gpad_device_list_ent_t**)controller_list);
+    }
 
     if(plugged_in_controller != NULL){
         puts("List of controllers available...");
