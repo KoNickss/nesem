@@ -1710,7 +1710,6 @@ gpad_device_list_t gpad_list_evdev_devices(void){
 			DPERROR("Could not open \"%s\" for reading! ", device_path_buffer);
 			continue;
 		}
-		//TODO: HEre
 		
 		evdev_device_capiblites_t cap = EVDEV_DEVICE_CAP_INITIALIZER;
 
