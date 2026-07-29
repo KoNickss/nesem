@@ -486,7 +486,6 @@ static int _gpad_read_evdev(gpad_t* gpad){
 			case EV_KEY:
 
 				button_mapping_t button_index = -1;
-				PRINT_INFO("evdev", "C%X, V%X", ev.code, ev.value);
 				
 				for(ssize_t i = 0; i < gpad->button_count; i++){
 					if(ev.code == evdev_mapping->button_mapping[i]){
@@ -583,7 +582,6 @@ static int _gpad_read_evdev(gpad_t* gpad){
 
 					value = ((float)ev_value_new)/((float)(stick_ptr->max_value - stick_ptr->min_value)); //(0.0f, 1.0f)
 					value = (value * 2.0f) - 1.0f; //Min value should be negative (-1.0f, 1.0f)
-					
 				}
 
 				if(stick >= 0){

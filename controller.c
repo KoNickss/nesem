@@ -247,10 +247,10 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 					down_pressed =  (gp->buttons & DPAD_DOWN_MASK) || gp->axis[LSTICK_AXIS].y >= (DEADZONE_STICK * 1.0f);
 
 					if(gp->model.nintendo == GPAD_CON_MODEL_NINTENDO_SWITCH_PRO){
-						left_pressed = gp->axis[DPAD_AXIS].x <= (DEADZONE_STICK * -1.0f);
-						right_pressed = gp->axis[DPAD_AXIS].x >= (DEADZONE_STICK * 1.0f);
-						up_pressed = gp->axis[DPAD_AXIS].y <= (DEADZONE_STICK * -1.0f);
-						down_pressed = gp->axis[DPAD_AXIS].y >= (DEADZONE_STICK * 1.0f);
+						left_pressed |= gp->axis[DPAD_AXIS].x <= (DEADZONE_STICK * -1.0f);
+						right_pressed |= gp->axis[DPAD_AXIS].x >= (DEADZONE_STICK * 1.0f);
+						up_pressed |= gp->axis[DPAD_AXIS].y <= (DEADZONE_STICK * -1.0f);
+						down_pressed |= gp->axis[DPAD_AXIS].y >= (DEADZONE_STICK * 1.0f);
 					}
 
 					joypad_set_button(joypad_index, BUTTON_DOWN, down_pressed);
