@@ -335,7 +335,9 @@ static void window_handle_event(XEvent* __restrict__ event){
     	case KeyRelease:
     	case KeyPress:
     		len = XLookupString(&event->xkey, buf, sizeof(buf) - 1, &keysym, NULL);
-    		window_handle_key(event->type == KeyPress, buf[0]);
+            if(len == 1){
+    		    window_handle_key(event->type == KeyPress, buf[0]);
+            }
     		(void)len;
     	break;
         case ClientMessage:

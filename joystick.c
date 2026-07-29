@@ -591,7 +591,7 @@ static int _gpad_read_evdev(gpad_t* gpad){
 
 			break;
 			default:
-				DERROR("UNKNOW EVDEV COMMAND %X:%X:%X", ev.type, ev.code, ev.value);
+				DERROR("UNKNOWN EVDEV COMMAND %X:%X:%X", ev.type, ev.code, ev.value);
 			break;
 		}
 	}
@@ -1054,7 +1054,10 @@ static GPAD_CON_MODEL_NINTENDO_T _get_nintendo_product(const vendor_data_t* vend
 
 	switch(vend->product_id){
 		case 0x330:
-			//Allow code to fall down to name search
+			return GPAD_CON_MODEL_NINTENDO_WII_U_PRO_CONTROLLER;
+		break;
+		case 0x306:
+			return GPAD_CON_MODEL_NINTENDO_WII_MOTE;
 		break;
 		case 0x2006:
 			return GPAD_CON_MODEL_NINTENDO_SWITCH_PRO;

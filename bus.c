@@ -186,7 +186,7 @@ int main(int argc, char * argv[]){
         cpu->PC = romStartAddress; //Rom was not a test rom. Load normally
     }
 
-    initPpu(); //Create ppu thread and initalize memory
+    initPpu(); //Create ppu and initalize memory
 
     while(true){
 

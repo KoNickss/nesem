@@ -673,7 +673,7 @@ void ppuClock(CPU* cpu){
             ppu.secondary_oam.sprites_size = 0;
         }
         //Sprite evaluation
-        if(cycle == 65 && scanline >= 0){   //if(65 <= cycle && cycle <= 256){
+        if(cycle == 65 && scanline >= 0 && ppu.mask.enableSpriteRendering){   //if(65 <= cycle && cycle <= 256){
             next_renderingSprite0 = 0;
             for(word sprite_idx = 0; sprite_idx < MAX_NUM_SPRITES; sprite_idx++){
                 if(0xEF <= ppu.ppuOAM.sprites[sprite_idx].y && ppu.ppuOAM.sprites[sprite_idx].y <= 0xFF) continue; //Real PPU does not render at this Y coordinate
@@ -692,7 +692,7 @@ void ppuClock(CPU* cpu){
             }
         }
         //Copy pixel data into secondary OAM latches
-        if(257 <= cycle && cycle <= 320 && 0 <= scanline && scanline < SCREEN_HEIGHT){
+        if((257 <= cycle && cycle <= 320) && (0 <= scanline && scanline < SCREEN_HEIGHT) && ppu.mask.enableSpriteRendering){
             if(cycle == 257){
                 //initialization
                 ppu.secondary_oam.pix_data_size = 0;
@@ -728,7 +728,7 @@ void ppuClock(CPU* cpu){
         }
         //HACK: Additional support for more than 8 sprites. Choose to move additional hacked in secondary OAM after the official 8 have been moved over
         if(cycle == 321){
-            if(ppu.secondary_oam.sprites_size > 8 && 0){
+            if(ppu.secondary_oam.sprites_size > 8){
                 for(word sprite_idx = 8; sprite_idx < ppu.secondary_oam.sprites_size; sprite_idx++){
                     SecondaryOAM_PixData* pixdata = &ppu.secondary_oam.pix_data[sprite_idx];
                     word relative_y = scanline - ppu.secondary_oam.sprites[sprite_idx].y;
