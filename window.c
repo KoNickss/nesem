@@ -6,6 +6,8 @@
 #include <X11/Xutil.h>
 #include <X11/Xos.h>
 #include <X11/Xcms.h>
+#include <X11/XKBlib.h>
+#include <X11/keysym.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -270,12 +272,27 @@ static void window_redraw(void){
 }
 
 
-static void window_handle_key(bool key_pressed, byte keycode){
+typedef struct{
+    KeyCode code;
+    char mapped_char;
+}keycode_def_t;
+
+static void window_handle_key(bool key_pressed, KeySym keysym, const keycode_def_t* mapped_inputs, size_t mapped_inputs_size){
 	bool valid_key_pressed = true;
 
     if(joypad_get_joypad_mode(JOYPAD_1) == CONTROLLER_MODE_CONTROLLER){
         return;
     }
+
+    char keycode = '\0';
+
+    for(int i = 0; i < mapped_inputs_size; i++){
+        if(keysym == mapped_inputs[i].code){
+            keycode = mapped_inputs[i].mapped_char;
+            break;
+        }
+    }
+
 
 	switch(keycode){
 		case 'w':
@@ -315,10 +332,32 @@ bool window_shutdown_triggered(void){
     return _window_program_should_exit;
 }
 
+void window_get_input(void){
+    unsigned char buf[32] = {0};
+    pthread_mutex_lock(&mutex);
+    keycode_def_t mapped_inputs[] = {
+        {.code = XKeysymToKeycode(dis, XK_W), .mapped_char='w'},
+        {.code = XKeysymToKeycode(dis, XK_A), .mapped_char='a'},
+        {.code = XKeysymToKeycode(dis, XK_S), .mapped_char='s'},
+        {.code = XKeysymToKeycode(dis, XK_D), .mapped_char='d'},
+        {.code = XKeysymToKeycode(dis, XK_comma), .mapped_char=','},
+        {.code = XKeysymToKeycode(dis, XK_period), .mapped_char='.'},
+        {.code = XKeysymToKeycode(dis, XK_quoteright), .mapped_char='\''},
+        {.code = XKeysymToKeycode(dis, XK_semicolon), .mapped_char=';'},
+    };
+    size_t mapped_inputs_size = sizeof(mapped_inputs)/sizeof(keycode_def_t);
+
+    XQueryKeymap(dis, (char*)buf);
+    for(int i = 0; i < 32*8; i++){
+        bool was_pressed = buf[i / 8] & (1 << (i % 8));
+        window_handle_key(was_pressed , i, mapped_inputs, mapped_inputs_size);
+    }
+    pthread_mutex_unlock(&mutex);
+}
+
 
 static void window_handle_event(XEvent* __restrict__ event){
     //Handle keystrokes here
-	char buf[128] = {0};
 	KeySym keysym;
 	int len;
 
@@ -334,10 +373,7 @@ static void window_handle_event(XEvent* __restrict__ event){
     	break;
     	case KeyRelease:
     	case KeyPress:
-    		len = XLookupString(&event->xkey, buf, sizeof(buf) - 1, &keysym, NULL);
-            if(len == 1){
-    		    window_handle_key(event->type == KeyPress, buf[0]);
-            }
+
     		(void)len;
     	break;
         case ClientMessage:

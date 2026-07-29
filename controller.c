@@ -1,5 +1,6 @@
 #include "controller.h"
 #include "common.h"
+#include "window.h"
 #include <stdio.h>
 
 
@@ -303,8 +304,19 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 //Fills the shift register and publishes the button states
 void joypad_publish_state(void){
 	for(int i = 0; i < JOYPAD_COUNT; i++){
-		if(joypad_get_joypad_mode(i) == CONTROLLER_MODE_CONTROLLER){
-			_poll_controller_state(i);
+		switch(joypad_get_joypad_mode(i)){
+			case CONTROLLER_MODE_KEYBOARD:
+				window_get_input();
+			break;
+			case CONTROLLER_MODE_CONTROLLER:
+				_poll_controller_state(i);
+			break;
+			case CONTROLLER_MODE____INVALID:
+			break;
+			default:
+				DERROR("Invalid controller type %i", joypad_get_joypad_mode(i));
+				abort();
+			break;
 		}
 
 		jp[i].is_polled = true;
