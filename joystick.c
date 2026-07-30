@@ -312,6 +312,116 @@ static const evdev_mapping_t* _get_evdev_mapping(gpad_t* gpad){
 
 					return &SWITCH_PRO_MAPPING;
 				break;
+				case GPAD_CON_MODEL_NINTENDO_JOYCON_L:
+					static const ssize_t SWITCH_JOYCON_L_BUTTON_MAPPING[] = {
+						0x222, //Down button
+						0x223, //Up Button
+						0x221, //Right button,
+						0x220, //Left button
+						0x13D, //Stick down
+						0x135, //Screenshot button
+						0x136, //L
+						0x138, //ZL
+						0x137, //SL
+						0x139, //SR
+						0x13A, //(select)
+					};
+					gpad->button_count = sizeof(SWITCH_JOYCON_L_BUTTON_MAPPING)/sizeof(ssize_t);
+
+					static const axis_mapping_t SWITCH_JOYCON_L_AXIS_MAPPING = {
+						.hat = {
+							{-1, -1},
+							{-1, -1},
+							{-1, -1},
+							{-1, -1}
+						},
+						.abs_x = {
+							.stick_idx = 0,
+							.oridinal_axis = GPAD_ORDINAL_AXIS_Y_INDEX,
+							.min_value=32767,
+							.max_value=-32767
+						},
+						.abs_y = {
+							.stick_idx = 0,
+							.oridinal_axis = GPAD_ORDINAL_AXIS_X_INDEX,
+							.min_value=-32767,
+							.max_value=32767
+						},
+						.abs_z = {
+							.stick_idx = -1,
+						},
+						.abs_rx = {
+							.stick_idx = -1,
+						},
+						.abs_ry = {
+							.stick_idx = -1,
+						},
+						.abs_rz = {
+							.stick_idx = -1,
+						},
+					};
+					static const evdev_mapping_t SWITCH_JOYCON_L_MAPPING = {
+						.button_mapping = SWITCH_JOYCON_L_BUTTON_MAPPING,
+						.axis_mapping = &SWITCH_JOYCON_L_AXIS_MAPPING
+					};
+
+					return &SWITCH_JOYCON_L_MAPPING;
+				break;
+				case GPAD_CON_MODEL_NINTENDO_JOYCON_R:
+					static const ssize_t SWITCH_JOYCON_R_BUTTON_MAPPING[] = {
+						0x131, //A button
+						0x134, //Up Button
+						0x133, //Right button,
+						0x130, //B button
+						0x13E, //Stick down
+						0x13C, //Home button
+						0x137, //L
+						0x139, //ZL
+						0x136, //SL
+						0x138, //SR
+						0x13B, //(start)
+					};
+					gpad->button_count = sizeof(SWITCH_JOYCON_R_BUTTON_MAPPING)/sizeof(ssize_t);
+
+					static const axis_mapping_t SWITCH_JOYCON_R_AXIS_MAPPING = {
+						.hat = {
+							{-1, -1},
+							{-1, -1},
+							{-1, -1},
+							{-1, -1}
+						},
+						.abs_x = {
+							.stick_idx = -1,
+						},
+						.abs_y = {
+							.stick_idx = -1,
+						},
+						.abs_z = {
+							.stick_idx = -1,
+						},
+						.abs_rx = {
+							.stick_idx = 0,
+							.oridinal_axis = GPAD_ORDINAL_AXIS_Y_INDEX,
+							.min_value=-32767,
+							.max_value=32767
+						},
+						.abs_ry = {
+							.stick_idx = 0,
+							.oridinal_axis = GPAD_ORDINAL_AXIS_X_INDEX,
+							.min_value=32767,
+							.max_value=-32767
+						},
+						.abs_rz = {
+							.stick_idx = -1,
+						},
+					};
+					static const evdev_mapping_t SWITCH_JOYCON_R_MAPPING = {
+						.button_mapping = SWITCH_JOYCON_R_BUTTON_MAPPING,
+						.axis_mapping = &SWITCH_JOYCON_R_AXIS_MAPPING
+					};
+
+					return &SWITCH_JOYCON_R_MAPPING;
+				break;
 				default:
 					DERROR("Not a mapped Nintendo controller (controller model = %u)!", gpad->model.nintendo);
 					return NULL;
@@ -594,6 +704,14 @@ static int _gpad_read_evdev(gpad_t* gpad){
 				DERROR("UNKNOWN EVDEV COMMAND %X:%X:%X", ev.type, ev.code, ev.value);
 			break;
 		}
+	}
+
+	if(errno != EAGAIN){
+		PRINT_ERROR("controller", "Error reading controller device!");
+		DPERROR("Controller \"%s\" could not be read! reason=", gpad->name);
+		smart_close(gpad->fd);
+		gpad->fd = -1;
+		return READ_FAILED;
 	}
 
 	return READ_OK;
@@ -1060,7 +1178,13 @@ static GPAD_CON_MODEL_NINTENDO_T _get_nintendo_product(const vendor_data_t* vend
 			return GPAD_CON_MODEL_NINTENDO_WII_MOTE;
 		break;
 		case 0x2006:
+			if(strncmp(name, "Joy-Con", strlen("Joy-Con")) == 0){
+				return GPAD_CON_MODEL_NINTENDO_JOYCON_L;
+			}
 			return GPAD_CON_MODEL_NINTENDO_SWITCH_PRO;
+		break;
+		case 0x2007:
+			return GPAD_CON_MODEL_NINTENDO_JOYCON_R; 
 		break;
 		default:
 			return GPAD_CON_MODEL_NINTENDO_UNKNOWN;

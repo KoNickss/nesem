@@ -217,6 +217,8 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 		case GPAD_CON_NINTENDO:
 			switch(gp->model.nintendo){
 				case GPAD_CON_MODEL_NINTENDO_SWITCH_PRO:
+				case GPAD_CON_MODEL_NINTENDO_JOYCON_L:
+				case GPAD_CON_MODEL_NINTENDO_JOYCON_R:
 				case GPAD_CON_MODEL_NINTENDO_WII_U_PRO_CONTROLLER:
 					DEADZONE_STICK = 0.4;
 					START_MASK = 0b1000000000;
@@ -229,12 +231,15 @@ static void _poll_controller_state(JOYPAD_t joypad_index){
 					DPAD_RIGHT_MASK = 0b1 << 15;
 					LSTICK_AXIS = 1;
 					
-					if(gp->model.nintendo == GPAD_CON_MODEL_NINTENDO_SWITCH_PRO){
+					if(gp->model.nintendo != GPAD_CON_MODEL_NINTENDO_WII_U_PRO_CONTROLLER){
 						DPAD_DOWN_MASK = 0;
 						DPAD_LEFT_MASK = 0;
 						DPAD_RIGHT_MASK = 0;
 						DPAD_UP_MASK = 0;
 						DPAD_AXIS = 0;
+					}
+					if(gp->model.nintendo == GPAD_CON_MODEL_NINTENDO_JOYCON_L || gp->model.nintendo == GPAD_CON_MODEL_NINTENDO_JOYCON_R){
+						LSTICK_AXIS = 0;
 					}
 
 					joypad_set_button(joypad_index, BUTTON_START, gp->buttons & START_MASK);
