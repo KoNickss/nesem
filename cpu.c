@@ -1924,7 +1924,7 @@ void initCpu(CPU * __restrict__ cpu){
     cpu->X = 0;
     cpu->Y = 0;
     cpu->SR.data = 0x24;
-    cpu->SP = 0xFF;
+    cpu->SP = 0xFD;
 
     cpu->extraCycles = 0;
 

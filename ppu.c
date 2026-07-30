@@ -478,6 +478,8 @@ void initPpu(){
         ppu.ppuOAM.data[i] = 0;
     }
 
+    ppu.is_odd_frame = false;
+
     sterlize_ppu();
 
     ppu.secondary_oam.sprites_capacity = 8;
@@ -920,7 +922,10 @@ void ppuClock(CPU* cpu){
 
 	cycle++;
     //SCANLINE over and reset counters
-    if(cycle >= 341){
+    if(
+        cycle >= 341 ||
+        (ppu.is_odd_frame && cycle >= 340 && scanline == -1) /*Check for early next scanline on odd frames*/
+    ){
         cycle = 0;
         scanline++;
 
@@ -937,6 +942,7 @@ void ppuClock(CPU* cpu){
     if(scanline > 260){
         scanline = -1;
         ppu.status.vblank = false;
+        ppu.is_odd_frame ^= 1;
         //Clear out any lsb/msb latches. 
         //If there was a sprite eval hit on the last scanline, 
         //it will wrap around and display on scanline 0 of next frame if we dont clear this

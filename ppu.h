@@ -171,7 +171,7 @@ typedef struct{
 
     OAM ppuOAM;
     SecondaryOAM secondary_oam;
-    bool frame_counter;
+    bool is_odd_frame;
 
 
     byte dataByteBuffer;
