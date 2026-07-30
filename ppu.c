@@ -937,6 +937,10 @@ void ppuClock(CPU* cpu){
     if(scanline > 260){
         scanline = -1;
         ppu.status.vblank = false;
+        //Clear out any lsb/msb latches. 
+        //If there was a sprite eval hit on the last scanline, 
+        //it will wrap around and display on scanline 0 of next frame if we dont clear this
+        ppu.secondary_oam.pix_data_size = 0;
     }
 }
 
