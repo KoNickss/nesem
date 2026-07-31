@@ -719,7 +719,7 @@ void SLO(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
 
 void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
 
-    cpu->opcodes = (struct instruction*)xmalloc(sizeof(struct instruction) * 0xFF); //allow memory for opcode array in cpu_opcodereg.h
+    cpu->opcodes = (struct instruction*)xmalloc(sizeof(struct instruction) * 256); //allow memory for opcode array in cpu_opcodereg.h
 
     //BRK codes
 
