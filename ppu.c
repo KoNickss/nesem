@@ -684,6 +684,8 @@ void ppuClock(CPU* cpu){
         }
     }
 
+    word spriteHeight = 8 + ppu.control.spriteSize * 8; //equivalent to: (ppu.control.spriteSize) ? 16 : 8;, but faster
+
     if(ppu.nmiNow){
         ppu.nmiNow = 0;
         cpuNmi(cpu);
@@ -705,17 +707,17 @@ void ppuClock(CPU* cpu){
 
 
         //Secondary OAM clear
-        if(cycle == 1){
+        if(cycle == 1 && (ppu.mask.enableSpriteRendering || ppu.mask.enableBackgroundRendering)){
             memset(ppu.secondary_oam.sprites, 0xFF, sizeof(ppu.secondary_oam.sprites));
             ppu.secondary_oam.sprites_size = 0;
         }
         //Sprite evaluation
-        if(cycle == 65 && scanline >= 0 && (ppu.mask.enableSpriteRendering | ppu.mask.enableBackgroundRendering)){
+        if(cycle == 256 && scanline >= 0 && (ppu.mask.enableSpriteRendering | ppu.mask.enableBackgroundRendering)){
             next_renderingSprite0 = 0;
             for(word sprite_idx = 0; sprite_idx < MAX_NUM_SPRITES; sprite_idx++){
                 if(0xEF <= ppu.ppuOAM.sprites[sprite_idx].y && ppu.ppuOAM.sprites[sprite_idx].y <= 0xFF) continue; //Real PPU does not render at this Y coordinate
                 if(scanline < ppu.ppuOAM.sprites[sprite_idx].y) continue; //Guaranteed to not be visible
-                if(scanline - ppu.ppuOAM.sprites[sprite_idx].y >= 8) continue; //Not visible anymore
+                if(scanline - ppu.ppuOAM.sprites[sprite_idx].y >= spriteHeight) continue; //Not visible anymore
                 if(ppu.secondary_oam.sprites_size == ppu.secondary_oam.sprites_capacity){//Secondary OAM is full!
                     ppu.status.spriteOverflow = 1;
                     continue;
@@ -737,15 +739,35 @@ void ppuClock(CPU* cpu){
                 //initialization
                 ppu.secondary_oam.pix_data_size = 0;
             }
+
             word cycle_relative = cycle - 257;
             byte sprite_idx = cycle_relative / 8;
             SecondaryOAM_PixData* pixdata = &ppu.secondary_oam.pix_data[sprite_idx];
 
             signed int relative_y = scanline - ppu.secondary_oam.sprites[sprite_idx].y;
             if(ppu.secondary_oam.sprites[sprite_idx].attribute.vertical_flip){
-                relative_y = 8 - relative_y - 1;
+                relative_y = spriteHeight - relative_y - 1;
             }
-            word ppu_tile_addr = ((word)ppu.control.spritePatternTable << 12) + (word)(ppu.secondary_oam.sprites[sprite_idx].tile << 4) + relative_y;
+
+            bool patternTable = (ppu.control.spriteSize) ?
+                (ppu.secondary_oam.sprites[sprite_idx].tile & 0b01) : //8x16 sprite mode, pattern table is taken from bit 0 of tile ID (yea, strange)
+                (ppu.control.spritePatternTable); //8x8 sprite mode, pattern table id is taken from bit 3 of PPUCTRL
+
+            word ppu_tile_addr;
+
+            if(ppu.control.spriteSize){
+                //8x16 sprite mode
+                byte tile = ppu.secondary_oam.sprites[sprite_idx].tile & 0b11111110;
+                if(relative_y >= 8){
+                    tile |= 1;
+                    relative_y -= 8;
+                }
+                ppu_tile_addr = ((word) patternTable << 12) + ((word) tile << 4) + relative_y;
+            }else{
+                //8x8 sprite mode
+                ppu_tile_addr = ((word) patternTable << 12) + ((word) ppu.secondary_oam.sprites[sprite_idx].tile << 4) + relative_y;
+            }
+
             switch(cycle_relative % 8){
                 case 0:
                     pixdata->x = ppu.secondary_oam.sprites[sprite_idx].x;
@@ -773,9 +795,27 @@ void ppuClock(CPU* cpu){
                     SecondaryOAM_PixData* pixdata = &ppu.secondary_oam.pix_data[sprite_idx];
                     word relative_y = scanline - ppu.secondary_oam.sprites[sprite_idx].y;
                     if(ppu.secondary_oam.sprites[sprite_idx].attribute.vertical_flip){
-                        relative_y = 8 - relative_y - 1;
+                        relative_y = spriteHeight - relative_y - 1;
                     }
-                    word ppu_tile_addr = ((word)ppu.control.spritePatternTable << 12) + (word)(ppu.secondary_oam.sprites[sprite_idx].tile << 4) + relative_y;
+
+                    word ppu_tile_addr;
+
+                    if(ppu.control.spriteSize){
+                        //8x16 sprite mode
+                        bool patternTable = (ppu.secondary_oam.sprites[sprite_idx].tile & 0b01);
+                        byte tile = ppu.secondary_oam.sprites[sprite_idx].tile & 0b11111110;
+                        if(relative_y >= 8){
+                            tile |= 1;
+                            relative_y -= 8;
+                        }
+                        ppu_tile_addr = ((word) patternTable << 12) + ((word) tile << 4) + relative_y;
+                    }else{
+                        //8x8 sprite mode
+                        bool patternTable = ppu.control.spritePatternTable;
+                        ppu_tile_addr = ((word) patternTable << 12) + ((word) ppu.secondary_oam.sprites[sprite_idx].tile << 4) + relative_y;
+                    }
+
+
                     pixdata->x = ppu.secondary_oam.sprites[sprite_idx].x;
                     pixdata->attribute = ppu.secondary_oam.sprites[sprite_idx].attribute;
                     pixdata->lsb = ppuRead( ppu_tile_addr + 0);

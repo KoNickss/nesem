@@ -699,7 +699,7 @@ void TYA(CPU * cpu, word bytes, busTransaction (*addressing)(CPU *, word, busRea
     cpu->SR.flags.Negative = cpu->A >> 7;
 }
 
-#if 0
+
 void SLO(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint)){
     busTransaction x = addressing(cpu, bytes, SUPPLY_ADDRESS_AND_DATA); //check line 85 for details
 
@@ -715,7 +715,7 @@ void SLO(CPU * __restrict__ cpu, word bytes, busTransaction (*addressing)(CPU *,
     cpu->SR.flags.Negative = x.value >> 7;
     ORA(cpu, x.value, IMM);
 }
-#endif
+
 
 void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
 
@@ -1795,13 +1795,12 @@ void initOpcodeReg(CPU * cpu){ //opcode code defined starting line 139
     cpu->opcodes[0x60].cycles = 6;
     cpu->opcodes[0x60].bytes = 1;
 
-#if 0
     cpu->opcodes[0x1F].microcode = &SLO;
     cpu->opcodes[0x1F].mode = &ABSX;
     cpu->opcodes[0x1F].name = "ASL + ORA";
     cpu->opcodes[0x1F].cycles = 7;
     cpu->opcodes[0x1F].bytes = 3;
-#endif
+
 }
 
 void printRegisters(CPU * __restrict__ cpu){
