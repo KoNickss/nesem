@@ -116,7 +116,7 @@ static byte ppuRead(word address){
         if(address >= 0x3F00 && address <= 0x3FFF) {
             address &= 0x3F1F; // Mirror down to $3F00-$3F1F
             if((address & 0x0013) == 0x0010) address &= ~0x0010; // Mirror $3F10/14/18/1C to $3F00/04/08/0C
-        
+
 
             if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
                 address = (address - 0x3F20) % 0x20 + 0x3F00;
@@ -281,7 +281,7 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
         break;
 
         case 1: //ppumask
-            
+
         break;
 
         case 2: //ppustatus
@@ -328,11 +328,11 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
                 returnData = ppuRead(ppu.vReg.data);
 
                 //Ensure proper palette read behavior/open bus behavior by only affecting lower 6 bits and then upper 2 bits are open bus
-                const byte palette_ram_affected_bits = 0b00111111;  
-                returnData = ( returnData & palette_ram_affected_bits) | (ppu_bus_data_latch & ~palette_ram_affected_bits); 
+                const byte palette_ram_affected_bits = 0b00111111;
+                returnData = ( returnData & palette_ram_affected_bits) | (ppu_bus_data_latch & ~palette_ram_affected_bits);
 
                 //Emulate buggy buffer behavior
-                ppu.dataByteBuffer = ppuRead(0x2000 | (ppu.vReg.data & 0xFFF)); 
+                ppu.dataByteBuffer = ppuRead(0x2000 | (ppu.vReg.data & 0xFFF));
             }else{
                 ppu.dataByteBuffer = ppuRead(ppu.vReg.data);
             }
@@ -350,7 +350,7 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
         break;
     }
 
-    return ppu_bus_data_latch;  
+    return ppu_bus_data_latch;
 }
 
 
@@ -666,11 +666,23 @@ static unsigned int* prepare_screen_image(void){
 
 bool next_renderingSprite0 = false;
 bool renderingSprite0 = false;
+byte sprite0Hit = 0;
 
 void ppuClock(CPU* cpu){
     //ppu.status.sprite0Hit=(scanline == 30) ;//&& (cycle >= 90); //TODO: Remove. 'Emulates' SMB1 sprite0hit
     //ppu.status.sprite0Hit=(scanline >= 190) || (scanline == 30) ; //TODO: Remove. 'Emulates' Ebike sprite0hit
 
+    if(sprite0Hit){
+        --sprite0Hit;
+        if(sprite0Hit == 1){
+            ppu.status.sprite0Hit = true; // actual flag
+
+            #ifdef DEBUG
+                printf("SPRITE0 HIT @ SL %d C %d\n", scanline, cycle);
+            #endif
+
+        }
+    }
 
     if(ppu.nmiNow){
         ppu.nmiNow = 0;
@@ -706,7 +718,7 @@ void ppuClock(CPU* cpu){
                 if(scanline - ppu.ppuOAM.sprites[sprite_idx].y >= 8) continue; //Not visible anymore
                 if(ppu.secondary_oam.sprites_size == ppu.secondary_oam.sprites_capacity){//Secondary OAM is full!
                     ppu.status.spriteOverflow = 1;
-                    continue; 
+                    continue;
                 }
 
                 ppu.secondary_oam.sprites[ppu.secondary_oam.sprites_size] = ppu.ppuOAM.sprites[sprite_idx];
@@ -930,10 +942,10 @@ void ppuClock(CPU* cpu){
                         && ppu.mask.enableBackgroundRendering
                         && !((cycle >= 0 && cycle <= 7) && (ppu.mask.showSpritesDebug == 0 || ppu.mask.showBackdropDebug == 0))
                         && cycle != 255
+                        && !sprite0Hit
                     ){
                         //HIT!
-
-                        ppu.status.sprite0Hit = true;
+                        sprite0Hit = 3; // wait 2 more clock cycles (until sprite0Hit var is 1 to register hit)
 
                     }
 
@@ -969,8 +981,8 @@ void ppuClock(CPU* cpu){
         scanline = -1;
         ppu.status.vblank = false;
         ppu.is_odd_frame ^= 1;
-        //Clear out any lsb/msb latches. 
-        //If there was a sprite eval hit on the last scanline, 
+        //Clear out any lsb/msb latches.
+        //If there was a sprite eval hit on the last scanline,
         //it will wrap around and display on scanline 0 of next frame if we dont clear this
         ppu.secondary_oam.pix_data_size = 0;
     }
