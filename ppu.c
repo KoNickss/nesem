@@ -91,11 +91,11 @@ static byte ppuRead(word address){
 
     address &= 0x3FFF;
 
-    static byte cartResponse = 0;
+    static byte ppu_read_bus_latch = 0;
 
-    bool valid_cart_response = cart_CHR_Read(address, &cartResponse);
+    bool valid_cart_response = cart_CHR_Read(address, &ppu_read_bus_latch);
     if(valid_cart_response){
-        return cartResponse;
+        return ppu_read_bus_latch;
     }else{
 
         if(address >= 0x2000 && address <= 0x2FFF){
@@ -104,21 +104,34 @@ static byte ppuRead(word address){
             } else {
                 address = 0x2000 + ((address >> 1) & 0x0400) + (address & 0x03FF);
             }
+
+            //Return the data and store it in the latches.
+            ppu_read_bus_latch = ppuBus[address];
+            return ppu_read_bus_latch;
         }
 
+        //TODO: Determine if we want to map 0x3000 - 0x3EFF to 0x2000 - 0x2FFF
+
+        //Check for reads to palette ram
         if(address >= 0x3F00 && address <= 0x3FFF) {
             address &= 0x3F1F; // Mirror down to $3F00-$3F1F
             if((address & 0x0013) == 0x0010) address &= ~0x0010; // Mirror $3F10/14/18/1C to $3F00/04/08/0C
+        
+
+            if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
+                address = (address - 0x3F20) % 0x20 + 0x3F00;
+
+            //Return the data and store it in the latches.
+            ppu_read_bus_latch = ppuBus[address];
+            if(ppu.mask.greyscale){
+                ppu_read_bus_latch &= ~0b1111; //Clear the bottom 4 bits;
+            }
+            return ppu_read_bus_latch;
         }
-
-        if(address >= 0x3F20 && address <= 0x3FFF) //mirrored region of palette data
-            address = (address - 0x3F20) % 0x20 + 0x3F00;
-
-        cartResponse = ppuBus[address];
-        return cartResponse;
     }
 
-
+    DWARN("Reading from PPU OpenBus addr 0x%X", address);
+    return ppu_read_bus_latch;
 }
 
 static void ppuWrite(word address, byte data){
@@ -310,10 +323,19 @@ byte ppuRegRead(word address){ //send the registers to the bus so the components
 
             returnData = ppu.dataByteBuffer; //reads are lagged back by one cycle, the data you read is the data of the last query
 
-            ppu.dataByteBuffer = ppuRead(ppu.vReg.data);
+            if(ppu.vReg.data >= 0x3F00 && 0x3FFF >= ppu.vReg.data){ //except when reading palette info
+                //then the query is immediate
+                returnData = ppuRead(ppu.vReg.data);
 
-            if(ppu.vReg.data >= 0x3F00 && 0x3FFF >= ppu.vReg.data) //except when reading palette info
-                returnData = ppuRead(ppu.vReg.data); //then the query is immediate
+                //Ensure proper palette read behavior/open bus behavior by only affecting lower 6 bits and then upper 2 bits are open bus
+                const byte palette_ram_affected_bits = 0b00111111;  
+                returnData = ( returnData & palette_ram_affected_bits) | (ppu_bus_data_latch & ~palette_ram_affected_bits); 
+
+                //Emulate buggy buffer behavior
+                ppu.dataByteBuffer = ppuRead(0x2000 | (ppu.vReg.data & 0xFFF)); 
+            }else{
+                ppu.dataByteBuffer = ppuRead(ppu.vReg.data);
+            }
 
             if(ppu.control.vramIncrement) ppu.vReg.data += 32;
             else ppu.vReg.data++;
@@ -658,6 +680,7 @@ void ppuClock(CPU* cpu){
     if(scanline == -1 && cycle == 1){
         ppu.status.vblank = 0;
         ppu.status.sprite0Hit = 0;
+        ppu.status.spriteOverflow = 0;
     }
 
     if(scanline >= -1 && scanline <= 239){
@@ -675,13 +698,16 @@ void ppuClock(CPU* cpu){
             ppu.secondary_oam.sprites_size = 0;
         }
         //Sprite evaluation
-        if(cycle == 65 && scanline >= 0 && ppu.mask.enableSpriteRendering){   //if(65 <= cycle && cycle <= 256){
+        if(cycle == 65 && scanline >= 0 && (ppu.mask.enableSpriteRendering | ppu.mask.enableBackgroundRendering)){
             next_renderingSprite0 = 0;
             for(word sprite_idx = 0; sprite_idx < MAX_NUM_SPRITES; sprite_idx++){
                 if(0xEF <= ppu.ppuOAM.sprites[sprite_idx].y && ppu.ppuOAM.sprites[sprite_idx].y <= 0xFF) continue; //Real PPU does not render at this Y coordinate
                 if(scanline < ppu.ppuOAM.sprites[sprite_idx].y) continue; //Guaranteed to not be visible
                 if(scanline - ppu.ppuOAM.sprites[sprite_idx].y >= 8) continue; //Not visible anymore
-                if(ppu.secondary_oam.sprites_size == ppu.secondary_oam.sprites_capacity) continue; //Secondary OAM is full!
+                if(ppu.secondary_oam.sprites_size == ppu.secondary_oam.sprites_capacity){//Secondary OAM is full!
+                    ppu.status.spriteOverflow = 1;
+                    continue; 
+                }
 
                 ppu.secondary_oam.sprites[ppu.secondary_oam.sprites_size] = ppu.ppuOAM.sprites[sprite_idx];
 
