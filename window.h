@@ -3,6 +3,9 @@
 
 #include <stdbool.h>
 
+const static inline unsigned int convert_rgba_to_bgra(unsigned int c){
+    return (c & 0xFF00FF00 | ((c >> 16) & 0xFF) | ((c << 16) & 0xFF0000));
+}
 
 typedef unsigned long win_size_t;
 

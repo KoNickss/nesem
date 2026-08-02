@@ -1,3 +1,6 @@
+#ifndef PPU_H
+#define PPU_H
+
 #include "bus.h"
 #include "cpu.h"
 #include <stdbool.h>
@@ -201,3 +204,8 @@ bool ppuGetNmiStatus(void);
 void ppuClearNmiStatus(void);
 
 #define OAM_DMA_ADDR 0x4014
+
+
+
+
+#endif

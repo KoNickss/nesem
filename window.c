@@ -70,17 +70,13 @@ static struct {
 }window_framebuffer;
 static bool window_framebuffer_updated = false;
 
-#define USE_AGBR 1
+#define USE_AGBR 0
 #define INDEX_PIXEL(buffer, x, y, width) (&((Color*)buffer)[y * width + x])
 static void Image_create(Image* __restrict o, Color* __restrict raw_pixels, win_size_t width, win_size_t height){
     o->width = width;
     o->height = height;
 
     Color* raw_output = (Color*)xmalloc(sizeof(Color) * width * height);
-    if(raw_output == NULL){
-        fprintf(stderr, "ERR: Out of memory! Tried to allocate %lu bytes\n", width * height * sizeof(Color));
-        abort();
-    }
 
     #if USE_AGBR
         //Convert RGBA to ABGR and copy image
@@ -218,11 +214,11 @@ static void window_redraw(void){
         XPutImage(dis, window_framebuffer.frame, gc, (XImage*)window_framebuffer.img_dat.ximg, 0, 0, 0, 0, window_framebuffer.img_dat.width, window_framebuffer.img_dat.height);
 
         #if WINDOW_ENABLE_CONTROLLER_OVERLAY
-            const unsigned int grey = 0xFFA0A0A0;
-            const unsigned int black = 0xFF000000;
-            const unsigned int red = 0xFF0000FF;
-            const unsigned int magenta = 0xFFFF00FF;
-            const unsigned int yellow = 0xFF00FFFF;
+            const unsigned int grey = convert_rgba_to_bgra(0xFFA0A0A0);
+            const unsigned int black = convert_rgba_to_bgra(0xFF000000);
+            const unsigned int red = convert_rgba_to_bgra(0xFF0000FF);
+            const unsigned int magenta = convert_rgba_to_bgra(0xFFFF00FF);
+            const unsigned int yellow = convert_rgba_to_bgra(0xFF00FFFF);
             for(win_size_t y = 0; y < WINDOW_CONTROLLER_OVERLAY_HEIGHT; y++){
                 for(win_size_t x = 0; x < WINDOW_CONTROLLER_OVERLAY_WIDTH; x++){
                     unsigned int color = grey;

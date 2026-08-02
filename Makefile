@@ -1,10 +1,10 @@
-CC = cc
-CFLAGS = -Ofast
+CC ?= cc
+CFLAGS = -Ofast -ffat-lto-objects -flto -fuse-linker-plugin -fno-stack-protector
+CFLAGS_EX ?=
 CDEBUGFLAGS = -g -DDEBUG -g
 LIBS=-lm -pthread -lX11 -lxcb
 RM = rm -rf
 OUTFILE = nesem
-
 
 ODIR ?= build
 
@@ -22,6 +22,8 @@ endif
 ifeq ($(DEBUG), true)
 	CFLAGS = $(CDEBUGFLAGS)
 endif
+
+CFLAGS += $(CFLAGS_EX)
 
 
 default: all
