@@ -38,7 +38,8 @@ typedef struct{
 
 typedef enum{
     SUPPLY_ADDRESS_ONLY,
-    SUPPLY_ADDRESS_AND_DATA // VERY IMPORTANT! we DONT want to read the data in the addressing functions for opcodes like STA when the real NES wouldnt because this messes up stateful reads (like PPUDATA)
+    SUPPLY_ADDRESS_AND_DATA, // VERY IMPORTANT! we DONT want to read the data in the addressing functions for opcodes like STA when the real NES wouldnt because this messes up stateful reads (like PPUDATA)
+    SUPPLY_ADDRESS_AND_DATA_WRITEBACK //For read, modify, write instructions
 }busReadConstraint;
 
 struct instruction;
@@ -54,18 +55,20 @@ typedef struct CPU{
     struct instruction * opcodes; //opcodes struct;
 
     //not part of the ACTUAL cpu, but useful flags I use for emulation
-    bool pcNeedsInc; //checks if CPU needs its PC incremented by the number of bytes of the opcode (all opcodes except the sub-routine ones, look for the flag in the code)
-    byte extraCycles; //sometimes we needs extra cycles to perform an instruction, we take not of them here
-    //TODO: add extra cycles for inter page INDX reads
+    int extraCycles; //for debugging purposes
+
+    word cycles_consumed_this_clock; //Only for debugging info
+    bool nmi_next_instruction;
 }CPU;
 
 struct instruction{
-    void (*microcode)(struct CPU *, word bytes, busTransaction (*addressing)(CPU *, word, busReadConstraint)); //generic definition for opcode funcs such as BRK, ORA, etc
-    busTransaction (*mode)(struct CPU * cpu, word bytes, busReadConstraint needsRead); //check line 85
+    void (*microcode)(struct CPU *, busTransaction (*addressing)(CPU *, busReadConstraint)); //generic definition for opcode funcs such as BRK, ORA, etc
+    busTransaction (*mode)(struct CPU * cpu, busReadConstraint needsRead); //check line 85
     char * name;
     char bytes;
     char cycles;
 };
+
 
 void printCpu(CPU * cpu); //debug functions
 void raiseError(unsigned int err, CPU * cpu);
@@ -76,6 +79,7 @@ void printRegisters(CPU * cpu);
 void initCpu(CPU * cpu); //init cpu, allocate memory for opcode register and set flags to initial state
 void cpuNmi(CPU * cpu); //process non-maskable interrupt, do not use this to trigger nmi, run the activateCpuNmi function in the bus instead
 
+void cpuConsumeCycle(CPU* cpu);
 int cpuClock(CPU * cpu); //tick function
 
 void cpuDestroy(CPU* cpu);

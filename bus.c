@@ -23,21 +23,28 @@ unsigned char bus[BUS_SIZE]; //this is the bus array
 
 #define TRANSLATE_PPU_ADDRESS(address) ((address - PPU_START) % 8 + PPU_START)
 
-int cpu_timeout_cycles = 0;
+static CPU* cpu = NULL;
+
 
 void performOamDMA(byte pageID){
     word startAddr = pageID << 8;
 
     byte page[256];
 
-    for(word i = 0; i < sizeof(page); ++i){
+    cpuConsumeCycle(cpu);
+    cpuConsumeCycle(cpu);
+    cpu->extraCycles += 2;
+    for(word i = 0; i < 256; ++i){
+        cpu->extraCycles += 2;
         page[i] = busRead8(startAddr + i);
+        cpuConsumeCycle(cpu); //Consume cycle for the write. Writes are handled by ppuSwallowOAMDMA so we handle acking the clock here. This is not proper emulation but it works okay
     }
 
     ppuSwallowOAMDMA(page);
 }
 
 void busWrite8(word address, byte data){
+    cpuConsumeCycle(cpu);
 
     if(cart_PRG_Write(address, data)){ //first thing we do is we hand the operation to the mapper to resolve any cartridge-side bank switching and mirroring, if the address we wanna write to isnt on the cartridge, we return false and we write to the bus normally
         return;
@@ -67,8 +74,6 @@ void busWrite8(word address, byte data){
 
             performOamDMA((byte)data); //because DMAs *usually* happen during vblank, we can get away with an instant copy and just bill the cycle cost to the cpu artificially, but to be 100% accurate we could paint it in as one by one, but that seems useless for the most part
 
-            cpu_timeout_cycles += 514; //bill it to the cpu
-
             return;
 
         }
@@ -77,8 +82,9 @@ void busWrite8(word address, byte data){
     }
 }
 
-byte busRead8(word address){
 
+//Do a read without affecting PPU
+static byte _busRead8NoCycle(word address){
     static byte data = 0;
     //we first ask the mapper to read the data from the address for us in case its on the cartridge, if it returns false that means the data stored at that address is not on the cartridge, but rather on the nes memory, thus we hand the job over to the bus
     bool valid_cart_response = cart_PRG_Read(address, &data);
@@ -113,16 +119,21 @@ byte busRead8(word address){
     }
 }
 
+byte busRead8(word address){
+    cpuConsumeCycle(cpu);
+
+    return _busRead8NoCycle(address);
+}
+
 word busRead16(word address){
-    word d = busRead8(address+1); //read msb
-    d <<= 8; //put msb in the msb section
-    d |= busRead8(address); //read lsb
+    word d = busRead8(address); //read lsb
+    d |= busRead8(address+1) << 8; //read msb
     return d; //return whole word
 }
 
 void busWrite16(word address, word data){
     busWrite8(address, data >> 8); //write msb
-    busWrite8(address + 1, data & 0b00001111); //write lsb
+    busWrite8(address + 1, data & 0b11111111); //write lsb
 }
 
 void dumpBus(){
@@ -134,6 +145,8 @@ void dumpBus(){
     //If the file was successfuly opened then this code will run
     for(unsigned long long i = 0; i <= 0xFFFF; i++)
         fprintf(fdump, "%c", busRead8(i));
+
+    fclose(fdump);
 }
 
 byte debug_read_do_not_use_pls(word address){
@@ -143,11 +156,13 @@ byte debug_read_do_not_use_pls(word address){
 
 static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
     handleErrors(cpu);
-    return;
+
     #ifdef DEBUG
-        printf("\n--name: %s opcode: %02X address: %04X    %d %p\n",
-            cpu->opcodes[opcode].name,
+    return;
+        printf("opcode: %02X\tSP: %02X\t--name: %s  address: %04X    %d %p\n",
             opcode,
+            cpu->SP,
+            cpu->opcodes[opcode].name,
             cpu->PC,
             cpu->opcodes[opcode].bytes,
             cpu->opcodes[opcode].microcode
@@ -165,10 +180,6 @@ static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
 
 
 int main(int argc, char * argv[]){
-    CPU * cpu = (CPU*)xmalloc(sizeof(CPU)); //create new CPU
-
-    initCpu(cpu); //put new CPU in starting mode and dock it to the bus
-
     if(argc <= 1){ //Check to see if a rom was given
         PRINT_ERROR("rom", "No Rom file Specified in Arguments");
         exit(EXIT_FAILURE);
@@ -178,15 +189,16 @@ int main(int argc, char * argv[]){
     initBanks(argv[1]);
     if(strstr(argv[1], ROM_TEST_NAME)){
         if(strlen(strstr(argv[1], ROM_TEST_NAME)) == strlen(ROM_TEST_NAME)){ //Load test rom at 0xC000
-            cpu->PC = 0xC000;
-        }else{
-            cpu->PC = romStartAddress; //Rom was in a folder called 'ROM_TEST_NAME' rather than loading a file with the same name
+            romStartAddress = 0xC000;
         }
-    }else{
-        cpu->PC = romStartAddress; //Rom was not a test rom. Load normally
     }
 
     initPpu(); //Create ppu and initalize memory
+
+    cpu = (CPU*)xmalloc(sizeof(CPU)); //create new CPU
+
+    initCpu(cpu); //put new CPU in starting mode and dock it to the bus
+    cpu->PC = romStartAddress;
 
     while(true){
 
@@ -202,16 +214,15 @@ int main(int argc, char * argv[]){
         //
         //RUN THE CPU CLOCK ONE TIME
 
+        word last_pc = cpu->PC;
         int cpuCycles = cpuClock(cpu);
-        cpuCycles += cpu_timeout_cycles;
-        cpu_timeout_cycles = 0;
+
+        SMART_ASSERT(cpuCycles == cpu->cycles_consumed_this_clock, "WONG CYCLE COUNT PC: %X, OP: %X, Real%i, Bad%i\n", last_pc, cpuCycles, _busRead8NoCycle(last_pc), cpu->cycles_consumed_this_clock);
 
         #ifdef DEBUG
-            debug_print_instruction(cpu, busRead8(cpu->PC));
+            debug_print_instruction(cpu, _busRead8NoCycle(cpu->PC));
         #endif
 
-        for(int i = 0; i < 3 * cpuCycles; ++i)
-            ppuClock(cpu);
 
         //
         //
