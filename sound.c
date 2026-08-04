@@ -15,6 +15,7 @@
 #include "common.h"
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 
 #define PLAYBACK_AUDIO_FORMAT ma_format_f32
 
@@ -33,7 +34,7 @@ static bool audio_system_initalized = false;
 typedef struct playback_sound_engine_align(64) {
     ma_pcm_rb buffer;
     float volume;
-    size_t frames_dropped;
+    atomic_llong frames_dropped;
     pthread_mutex_t mutex;
     pthread_cond_t cond_not_empty;
     pthread_cond_t cond_not_full;
@@ -79,10 +80,20 @@ playback_channel_t playback_channels[] = {
     PLAYBACK_CHANNEL_INITIALIZER,
     PLAYBACK_CHANNEL_INITIALIZER,
     PLAYBACK_CHANNEL_INITIALIZER,
-    PLAYBACK_CHANNEL_INITIALIZER
+    PLAYBACK_CHANNEL_INITIALIZER,
+    PLAYBACK_CHANNEL_INITIALIZER,
 };
 
-#define PLAYBACK_CHANNELS_COUNT (sizeof(playback_channels)/sizeof(playback_channel_t))
+
+#define PLAYBACK_ONE_CHANNEL true
+
+#if PLAYBACK_ONE_CHANNEL
+    #define PLAYBACK_CHANNELS_COUNT 1
+#else
+    #define PLAYBACK_CHANNELS_COUNT (sizeof(playback_channels)/sizeof(playback_channel_t))
+#endif
+
+
 
 static bool playback_init_channel(playback_channel_t* chan){
     if(chan == NULL || (audio_system_initalized == false)){
@@ -424,13 +435,11 @@ size_t playback_channel_write_frames(size_t channel_id, const float* src, size_t
 
         #if PLAYBACK_CONSUME_DROPPED_FRAMES
             if(playback_channels[channel_id].frames_dropped > 0){
-                pthread_mutex_lock(&playback_channels[channel_id].mutex);
                 size_t frames_to_consume = playback_channels[channel_id].frames_dropped;
                 if(frames_to_consume > num_frames){
                     frames_to_consume = num_frames;
                 }
                 playback_channels[channel_id].frames_dropped -= frames_to_consume;
-                pthread_mutex_unlock(&playback_channels[channel_id].mutex);
                 frames_written += frames_to_consume;
             }
         #endif
@@ -606,10 +615,13 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
     for(size_t i = 0; i <  PLAYBACK_CHANNELS_COUNT; i++){
         frames_remaining[i] = frameCount;
         previous_read_failed[i] = false;
+        playback_channels[i].frames_dropped += frameCount;
     }
 
     bool frames_left = false;
+    #if PLAYBACK_ONE_CHANNEL == false
     memset(_data_callback_fbuffer, 0, sizeof(_data_callback_fbuffer));
+    #endif
     do{
         frames_left = false;
         for(unsigned int i = 0; i < PLAYBACK_CHANNELS_COUNT; i++){
@@ -628,10 +640,16 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
                 if(framesToRead >= TEMP_DATA_BUFFER_SIZE_IN_FRAMES){
                     framesToRead = TEMP_DATA_BUFFER_SIZE_IN_FRAMES;
                 }
-                ma_uint64 framesReadThisIteration = playback_channel_read_frames(&playback_channels[i], _data_callback_fbuffer, framesToRead);
+                
+                #if PLAYBACK_ONE_CHANNEL
+                    ma_uint64 framesReadThisIteration = playback_channel_read_frames(&playback_channels[i], &((float*)pOutput)[totalFramesRead*CHANNEL_COUNT], framesToRead);
+                #else
+                    ma_uint64 framesReadThisIteration = playback_channel_read_frames(&playback_channels[i], _data_callback_fbuffer, framesToRead);
+                #endif
                 
                 #if SOUND_WAIT_FOR_WRITES == false
                     if(framesReadThisIteration == 0){
+                        #if SOUND_FADE_LAGGED_FRAMES
                         framesReadThisIteration = framesToRead;
                         DWARN("Emulator is lagging! Audio is being faded to compensate");
                         float fade_volume = 1.0f;
@@ -642,18 +660,19 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
                             _data_callback_fbuffer[iFrame*CHANNEL_COUNT + 0] = last_good_frame[0] * fade_volume; 
                             _data_callback_fbuffer[iFrame*CHANNEL_COUNT + 1] = last_good_frame[1] * fade_volume; 
                         }
-                        
-                        pthread_mutex_lock(&playback_channels[i].mutex);
-                        playback_channels[i].frames_dropped += framesToRead;
-                        pthread_mutex_unlock(&playback_channels[i].mutex);
+                        #endif
                     }
                 #endif
 
+                
+                #if !PLAYBACK_ONE_CHANNEL
                 /* Mix the frames together. */
                 for (ma_uint64 iSample = 0; iSample < framesReadThisIteration*CHANNEL_COUNT; ++iSample) {
                     ((float*)pOutput)[totalFramesRead*CHANNEL_COUNT + iSample] += _data_callback_fbuffer[iSample] * volume;
                 }
+                #endif
 
+                playback_channels[i].frames_dropped -= framesReadThisIteration;
                 frames_remaining[i] -= framesReadThisIteration;
                 if(frames_remaining[i] > 0){
                     frames_left |= true;
@@ -706,7 +725,7 @@ void* audio_thread(void* args){
 
         //Zero out either left or right ear depending on channel
         for(int i = channel_id; i < sizeof(buffer)/sizeof(float); i+=2){
-            buffer[i] = 0;
+            //buffer[i] = 0;
         }
 
         if(channel_id > 0){
@@ -765,11 +784,8 @@ bool playback_start_audio_engine(void){
     #if ENABLE_AUDIO_TESTER == true
     pthread_t th;
     size_t* c0 = xmalloc(sizeof(size_t));
-    size_t* c1 = xmalloc(sizeof(size_t));
     *c0 = 0;
-    *c1 = 1;
     pthread_create(&th, NULL, audio_thread, c0);
-    pthread_create(&th, NULL, audio_thread, c1);
     #endif
 
     
