@@ -2,9 +2,14 @@
 #include <time.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 //For displaying to the screen
 #include "window.h"
+
+//For soundcard
+#define BUS_C
+#include "sound.h"
 
 
 unsigned char bus[BUS_SIZE]; //this is the bus array
@@ -173,10 +178,64 @@ static inline void debug_print_instruction(CPU* __restrict__ cpu, byte opcode){
 
 
 
-
-
+static pthread_mutex_t _shutdown_signal_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t _shutdown_signal_cond;
+void shutdown_program(void){
+    pthread_mutex_lock(&_shutdown_signal_mutex);
+    pthread_cond_broadcast(&_shutdown_signal_cond);
+    pthread_mutex_unlock(&_shutdown_signal_mutex);
+}
 
 #define ROM_TEST_NAME ("nestest.nes")
+
+//#include <stdatomic.h>
+#define SOUNDCARD_DISABLED_STATE -1
+//static atomic_llong _soundcard_frames_requested = 0;
+static long long _soundcard_frames_requested = 0;
+
+
+
+void run_nes_for_x_audio_frames(size_t frame_count){
+    _soundcard_frames_requested += frame_count;
+
+    while(_soundcard_frames_requested > 0 || _soundcard_frames_requested == SOUNDCARD_DISABLED_STATE){
+        word last_pc = cpu->PC;
+        int cpuCycles = cpuClock(cpu);
+
+        SMART_ASSERT(cpuCycles == cpu->cycles_consumed_this_clock, "WONG CYCLE COUNT PC: %X, OP: %X, Real%i, Bad%i\n", last_pc, cpuCycles, _busRead8NoCycle(last_pc), cpu->cycles_consumed_this_clock);
+    }
+
+    if(window_shutdown_triggered()){
+        shutdown_program();
+        return;
+    }
+}
+
+void write_audio_frames_to_soundcard(float* frames, size_t frame_count){
+    //printf("Writing %lu frames\n", frame_count);
+    size_t frames_written = playback_write_frames(frames, frame_count);
+    _soundcard_frames_requested -= frames_written;
+    //printf("%lu frames written\n", frames_written);
+
+}
+
+
+static void* _run_nes(void* args){
+    (void)args;
+    while(true){
+        //TODO: Timing
+        word last_pc = cpu->PC;
+        int cpuCycles = cpuClock(cpu);
+
+        SMART_ASSERT(cpuCycles == cpu->cycles_consumed_this_clock, "WONG CYCLE COUNT PC: %X, OP: %X, Real%i, Bad%i\n", last_pc, cpuCycles, _busRead8NoCycle(last_pc), cpu->cycles_consumed_this_clock);
+        if(window_shutdown_triggered()){
+            shutdown_program();
+            return NULL;
+        }
+    }
+    
+    return NULL;
+}
 
 
 int main(int argc, char * argv[]){
@@ -200,51 +259,45 @@ int main(int argc, char * argv[]){
     initCpu(cpu); //put new CPU in starting mode and dock it to the bus
     cpu->PC = romStartAddress;
 
-    while(true){
-
-        #ifdef DEBUG
-            #if 0
-                debug_print_instruction(cpu, busRead8(cpu->PC));
-                printRegisters(cpu);
-                printCpu(cpu);
-            #endif
-        #endif
-
-        //
-        //
-        //RUN THE CPU CLOCK ONE TIME
-
-        word last_pc = cpu->PC;
-        int cpuCycles = cpuClock(cpu);
-
-        SMART_ASSERT(cpuCycles == cpu->cycles_consumed_this_clock, "WONG CYCLE COUNT PC: %X, OP: %X, Real%i, Bad%i\n", last_pc, cpuCycles, _busRead8NoCycle(last_pc), cpu->cycles_consumed_this_clock);
-
-        #ifdef DEBUG
-            debug_print_instruction(cpu, _busRead8NoCycle(cpu->PC));
-        #endif
-
-
-        //
-        //
-        //
-
-
-        #ifdef DEBUG
-            #ifdef TICKONKEY
-                getchar();
-            #endif
-        #endif
-
-        if(window_shutdown_triggered()){
-            cpuDestroy(cpu);
-            free(cpu);
-
-            window_destroy();
-            return EXIT_SUCCESS;
-        }
+    //Setup the mutex/cond for shutting everything down
+    if(pthread_mutex_init(&_shutdown_signal_mutex, NULL) != 0){
+        DERROR("Could not create the shutdown mutex");
+        return false;
+    }
+    if(pthread_cond_init(&_shutdown_signal_cond, NULL) != 0){
+        pthread_mutex_destroy(&_shutdown_signal_mutex);
+        DERROR("Could not create the pthread cond for shutdown");
+        return false;
     }
 
-    #ifdef DEBUG
-        dumpBus();
-    #endif
+    //Create sound engine
+    pthread_t t;
+    bool using_audio = playback_start_audio_engine();
+    if(using_audio == false){
+        PRINT_ERROR("audio", "Could not start audio engine!");
+        _soundcard_frames_requested = SOUNDCARD_DISABLED_STATE;
+        pthread_create(&t, NULL, _run_nes, NULL);
+    }
+
+
+    //Wait for program to exit
+    pthread_mutex_lock(&_shutdown_signal_mutex);
+    pthread_cond_wait(&_shutdown_signal_cond, &_shutdown_signal_mutex);
+    pthread_mutex_unlock(&_shutdown_signal_mutex);
+
+    //Cleanup memory
+    if(using_audio){
+        playback_destroy_audio_engine();
+    }else{
+        pthread_cancel(t);
+    }
+    cpuDestroy(cpu);
+    free(cpu);
+    
+    window_destroy();
+
+    pthread_mutex_destroy(&_shutdown_signal_mutex);
+    pthread_cond_destroy(&_shutdown_signal_cond);
+
+    return EXIT_SUCCESS;
 }

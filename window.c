@@ -165,11 +165,6 @@ void window_init(win_size_t width, win_size_t height){
     }
     gpad_device_list_free(controller_list);
 
-    //Create sound engine
-    if(playback_start_audio_engine() == false){
-        PRINT_ERROR("audio", "Could not start audio engine!");
-    }
-
     //Create window thread
     result = pthread_create(&window_thread_id, NULL, window_thread, NULL);
     SMART_ASSERT(result >= 0, "ERR: Could not create window thread!");
@@ -436,6 +431,4 @@ void window_destroy(void){
 
     joypad_disconnect(JOYPAD_1);
     joypad_disconnect(JOYPAD_2);
-
-    playback_destroy_audio_engine();
 }
