@@ -20,6 +20,8 @@ unsigned char bus[BUS_SIZE]; //this is the bus array
 
 #include "ppu.h"
 
+#include "apu.h"
+
 #include "cartridge.h"
 
 #include "controller.h"
@@ -83,6 +85,9 @@ void busWrite8(word address, byte data){
 
         }
 
+        if(address >= 0x4000 && address <= 0x4017)
+            apuRegWrite(address - 0x4000, data);
+
         DWARN("Could not write to address 0x%X! Open Bus Write!", address);
     }
 }
@@ -118,6 +123,9 @@ static byte _busRead8NoCycle(word address){
 
             return data;
         }
+
+        if(address >= 0x4000 && address <= 0x4017)
+            return apuRegRead(address - 0x4000);
 
         DWARN("Open bus read 0x%X", address);
         return data;
@@ -212,10 +220,15 @@ void run_nes_for_x_audio_frames(size_t frame_count){
 }
 
 void write_audio_frames_to_soundcard(float* frames, size_t frame_count){
-    //printf("Writing %lu frames\n", frame_count);
+
+    #ifdef DEBUG
+    printf("Writing %lu frames\n", frame_count);
+    #endif
     size_t frames_written = playback_write_frames(frames, frame_count);
     _soundcard_frames_requested -= frames_written;
-    //printf("%lu frames written\n", frames_written);
+    #ifdef DEBUG
+    printf("%lu frames written\n", frames_written);
+    #endif
 
 }
 
@@ -233,7 +246,7 @@ static void* _run_nes(void* args){
             return NULL;
         }
     }
-    
+
     return NULL;
 }
 
@@ -258,6 +271,8 @@ int main(int argc, char * argv[]){
 
     initCpu(cpu); //put new CPU in starting mode and dock it to the bus
     cpu->PC = romStartAddress;
+
+    initApu();
 
     //Setup the mutex/cond for shutting everything down
     if(pthread_mutex_init(&_shutdown_signal_mutex, NULL) != 0){
@@ -293,7 +308,7 @@ int main(int argc, char * argv[]){
     }
     cpuDestroy(cpu);
     free(cpu);
-    
+
     window_destroy();
 
     pthread_mutex_destroy(&_shutdown_signal_mutex);

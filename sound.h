@@ -15,7 +15,7 @@
 
 bool playback_start_audio_engine(void);
 
-#ifdef BUS_C
+#if 1
 //Only give access to bus.c to this function
     size_t playback_write_frames(float* frames, unsigned int frame_count);
 #endif

@@ -1,6 +1,7 @@
 #include "cpu.h" //plsease read the header file before reading this file
 #include "bus.h" //includes bus-wide definitions such as bus write/read functions and data types generic among all nes components
 #include "ppu.h"
+#include "apu.h"
 #include <time.h>
 #include <unistd.h>
 
@@ -26,6 +27,8 @@
 void print_stack(CPU * cpu);
 //////////////////////////////////
 
+
+bool evenCycle = true;
 void cpuConsumeCycle(CPU* cpu){
     if(cpu){
         ppuClock(cpu);
@@ -33,6 +36,12 @@ void cpuConsumeCycle(CPU* cpu){
         ppuClock(cpu);
         cpu->cycles_consumed_this_clock++;
     }
+
+    if(evenCycle){
+        apuClock();
+    }
+
+    evenCycle = !evenCycle;
 }
 
 static inline void incPC(CPU* cpu){
@@ -65,7 +74,7 @@ static inline byte stackRead8(CPU* cpu){
     }
     byte ret = busRead8(cpu->SP + STACK_RAM_OFFSET);
     cpu->SP++;
-    
+
     _stack_rw_access_state = STACK_READ_CONSECUTIVE_ACCESS;
     return ret;
 }
@@ -347,7 +356,7 @@ void BPL(CPU * __restrict__ cpu, busTransaction (*addressing)(CPU *, busReadCons
 
 void CLC(CPU * __restrict__ cpu, busTransaction (*addressing)(CPU *, busReadConstraint) ){
     busTransaction x = addressing(cpu, SUPPLY_ADDRESS_ONLY);
-    
+
     cpu->SR.flags.Carry = 0;
 }
 
@@ -2023,7 +2032,7 @@ void print_stack(CPU * __restrict__ cpu){
             }
             if(i == cpu->SP + STACK_RAM_OFFSET + 1){
                 x[0] = '{';
-                x[1] = '}';   
+                x[1] = '}';
             }
             printf(" %c%02X%c ", x[0], busRead8(i), x[1]);
             x[0] = '.';
@@ -2089,7 +2098,7 @@ void initCpu(CPU * __restrict__ cpu){
     cpu->extraCycles = 0;
     cpu->cycles_consumed_this_clock = 0;
     cpu->nmi_next_instruction = false;
-    
+
     initOpcodeReg(cpu);//import the stuff about each microcode, stuff like bytes per instruction, cycles, adressing mode, and operation in the array, where the value in the array is the byte that triggers that action for the CPU
 }
 

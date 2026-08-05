@@ -11,7 +11,7 @@ ODIR ?= build
 TICK_ON_KEY ?= false
 DEBUG ?= false
 
-C_FILES ?= bus.c cpu.c cartridge.c ppu.c window.c controller.c joystick.c sound.c
+C_FILES ?= bus.c cpu.c cartridge.c ppu.c apu.c window.c controller.c joystick.c sound.c
 O_FILES = $(abspath $(addprefix $(ODIR)/, $(C_FILES:.c=.o)))
 
 
