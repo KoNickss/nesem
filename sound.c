@@ -30,9 +30,6 @@ size_t playback_write_frames(float* frames, unsigned int frame_count){
     ma_uint32 num_frames = frame_count;
     float* src = frames;
     if(num_frames == 0 || (audio_system_initalized == false)){
-        #ifdef DEBUG
-        printf("IM TURNED OFF! (audio system)\n");
-        #endif
         return 0;
     }
     size_t frames_written = 0;
@@ -63,9 +60,6 @@ size_t playback_write_frames(float* frames, unsigned int frame_count){
 
         frames_written += write_buffer_size_in_frames;
     }
-    #ifdef DEBUG
-    printf("WROTE %d FRAMES\n", frames_written);
-    #endif
     return frames_written;
 }
 
@@ -80,9 +74,8 @@ static size_t _playback_read_frames(float* dest, size_t num_frames){
     while(frames_read < num_frames){
         ma_uint32 read_buffer_size_in_frames = num_frames - frames_read;
         void* read_buffer_ptr = NULL;
-        if(_playback_get_available_frames() <= 0){
-            //return frames_read;
-            abort();
+        while(_playback_get_available_frames() <= 0){
+            //Spin until ready
         }
         ma_result res = MA_SUCCESS;
         if((res = ma_pcm_rb_acquire_read(&_audio_frame_buffer, &read_buffer_size_in_frames, &read_buffer_ptr)) != MA_SUCCESS || read_buffer_ptr == NULL){
@@ -101,9 +94,6 @@ static size_t _playback_read_frames(float* dest, size_t num_frames){
         frames_read += read_buffer_size_in_frames;
         dest += read_buffer_size_in_frames * CHANNEL_COUNT;
     }
-    #ifdef DEBUG
-    printf("GOT %d FRAMES\n", frames_read);
-    #endif
     return frames_read;
 }
 
@@ -137,7 +127,7 @@ static void data_callback(ma_device* __restrict__ pDevice, void* __restrict__ pO
         }
         frames_to_read_this_iter = frames_remaining;
         run_nes_for_x_audio_frames(frames_to_read_this_iter);
-        frames_remaining = _playback_read_frames(&((float*)pOutput)[totalFramesRead*CHANNEL_COUNT], frames_to_read_this_iter);
+        frames_remaining -= _playback_read_frames(&((float*)pOutput)[totalFramesRead*CHANNEL_COUNT], frames_to_read_this_iter);
         totalFramesRead += frames_read_this_call;
 
         //printf("FramesReadThisIteration=%u\n", framesReadThisIteration);

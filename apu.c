@@ -94,9 +94,10 @@ static inline double getPulseWaveValue(PulseReg p, double time){
 
     double sqwtime = ftime - gtime; //square wave in function of time
 
-    double sqwtime_w_volume = sqwtime * normalizeVolume(p.field.volume); //account for amplitude via volume
+    //double sqwtime_w_volume = sqwtime * normalizeVolume(p.field.volume); //account for amplitude via volume
 
-    return sqwtime_w_volume;
+    double nes_hardware_value = ((sqwtime + 1.0) / 2.0) * p.field.volume;
+    return nes_hardware_value;
 }
 
 
@@ -135,23 +136,27 @@ void apuClock(){
     printf("APU CLOCK!\n");
     #endif
 
-    apuInternalState.audio_cycle_timer += 1.0;
+    apuInternalState.audio_cycle_timer += 2.0; //otherwise game runs at 200% speed, idk
 
     if(apuInternalState.audio_cycle_timer >= CPU_CYCLES_PER_AUDIO_FRAME){
         apuInternalState.audio_cycle_timer -= CPU_CYCLES_PER_AUDIO_FRAME;
 
+        apuInternalState.stream_time += (1.0 / 44100.0);
+
+        if(apuInternalState.stream_time >= 7)
+            apuInternalState.stream_time -= 7;
+
         double wavePointPulse1 = 0.0; //THIS SHOULD BE 0, IS1 FOR DEBUGGING, IF YOU SEE THIS CHANGE ME BACK!!
 
-        if(pulseReg1.field.volume == 0 && pulseRegGetTimer(pulseReg1) < 8){
+        if(pulseReg1.field.volume == 0 || pulseRegGetTimer(pulseReg1) < 8){
             //reset stream time on silence to prevent FP precision loss
-            apuInternalState.stream_time = 0.00001;
+            //apuInternalState.stream_time = 0.00001;
             wavePointPulse1 = 0.0;
             #ifdef DEBUG
             printf("--############# IM QUIET %d %d %d %d\n", pulseReg1.data[0],pulseReg1.data[1],pulseReg1.data[2],pulseReg1.data[3]);
             #endif
         } else {
             wavePointPulse1 = getPulseWaveValue(pulseReg1, apuInternalState.stream_time);
-            apuInternalState.stream_time += (1.0 / 44100.0);
             #ifdef DEBUG
             printf("--!_!_!_!_!_!_! GOT WAVE %f\n", wavePointPulse1);
             #endif
@@ -159,16 +164,15 @@ void apuClock(){
 
         double wavePointPulse2 = 0.0; //THIS SHOULD BE 0, IS1 FOR DEBUGGING, IF YOU SEE THIS CHANGE ME BACK!!
 
-        if(pulseReg2.field.volume == 0 && pulseRegGetTimer(pulseReg2) < 8){
+        if(pulseReg2.field.volume == 0 || pulseRegGetTimer(pulseReg2) < 8){
             //reset stream time on silence to prevent FP precision loss
-            apuInternalState.stream_time = 0.00001;
+            //apuInternalState.stream_time = 0.00001;
             wavePointPulse2 = 0.0;
             #ifdef DEBUG
             printf("--############# IM QUIET %d %d %d %d\n", pulseReg2.data[0],pulseReg2.data[1],pulseReg2.data[2],pulseReg2.data[3]);
             #endif
         } else {
             wavePointPulse2 = getPulseWaveValue(pulseReg2, apuInternalState.stream_time);
-            apuInternalState.stream_time += (1.0 / 44100.0);
             #ifdef DEBUG
             printf("--!_!_!_!_!_!_! GOT WAVE %f\n", wavePointPulse1);
             #endif

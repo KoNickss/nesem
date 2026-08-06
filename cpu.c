@@ -2130,7 +2130,7 @@ void cpuNmi_Real(CPU * cpu){
 	// Calculate remaining time to wait if needed
 	if (elapsed < min_duration) {
 	    // Sleep for the remaining time, converted to microseconds
-	    usleep((min_duration - elapsed) * 1000000 / CLOCKS_PER_SEC);
+	    //usleep((min_duration - elapsed) * 1000000 / CLOCKS_PER_SEC);
         DWARN("FRAME IS TOO FAST! Slowing down");
 	}
     start = clock();

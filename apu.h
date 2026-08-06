@@ -14,7 +14,7 @@ static inline double fastsine(double x);
 
 //SETTING DIALS OF SORTS
 
-#define HARMONICS 27
+#define HARMONICS 10
 
 typedef struct{
     double audio_cycle_timer;
