@@ -32,7 +32,7 @@ bool mapper000_CHR_Read(word address, byte* data_out){
     SMART_ASSERT(data_out != NULL, "Data output address was NULL!");
     if(Header.CHR_BANKS == 0){
         return false; //if no CHR banks, nothing to mirror
-    }else if (address <= 0x2000){
+    }else if (address <= 0x1FFF){
         *data_out = CHRROM[address];
         return true;
     }else{
